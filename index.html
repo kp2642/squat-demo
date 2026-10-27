@@ -63,8 +63,8 @@ label.lbl{font-size:14px;font-weight:600}
 <body>
 
 <section id="intro" class="screen on">
-  <h1>스쿼트 코치 데모</h1>
-  <p>휴대폰을 세워두고 옆에서 스쿼트를 하면 횟수를 세고, 자세를 소리로 알려드려요. 영상은 이 휴대폰 밖으로 나가지 않아요.</p>
+  <h1>스쿼트 코치 데모 <small style="font-size:14px;color:#5F5F5F">v2</small></h1>
+  <p>휴대폰을 세워두고 몸 옆면이 보이게 서서, 똑바로 선 채 1초 멈추면 시작해요. 스쿼트를 하면 횟수를 세고, 자세를 소리로 알려드려요. 영상은 이 휴대폰 밖으로 나가지 않아요.</p>
   <div class="tips">
     <div class="tip"><b>2m</b><span>떨어진 거리</span></div>
     <div class="tip"><b>허리 높이</b><span>폰 거치 위치</span></div>
@@ -120,7 +120,7 @@ label.lbl{font-size:14px;font-weight:600}
   <div class="stats">
     <div class="stat"><span>횟수</span><b id="sReps">0</b></div>
     <div class="stat"><span>충분한 깊이</span><b id="sDepth">0</b></div>
-    <div class="stat"><span>평균 최저 무릎각</span><b id="sKnee">-</b></div>
+    <div class="stat"><span>평균 점수</span><b id="sKnee">-</b></div>
   </div>
   <div>
     <b style="font-size:15px">판정이 맞았나요?</b>
@@ -134,7 +134,7 @@ label.lbl{font-size:14px;font-weight:600}
 </section>
 
 <script type="module">
-import { measure, SquatCounter, CUE_TEXT } from './squat-logic.js';
+import { measure, SquatCounter, CUE_TEXT } from './squat-logic.js?v=2';
 
 const MP_BASE = window.MP_BASE || 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
 const MODEL_URL = window.MP_MODEL || 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
@@ -207,7 +207,7 @@ async function start() {
   $('count').innerHTML = `0<small> / ${target}</small>`;
   setStatus('옆으로 서서 전신이 화면에 들어오게 해주세요');
   show('live'); running = true; notVisibleSince = performance.now();
-  say('옆으로 서서 전신이 보이게 해주세요. 준비되면 시작하세요.');
+  say('옆으로 서서 전신이 보이게 해주세요. 똑바로 서서 잠깐 멈추면 시작해요.');
   loop();
 }
 
@@ -223,10 +223,11 @@ function draw(lm, m) {
   const ox = (W - vw * s) / 2, oy = (H - vh * s) / 2;
   const P = (i) => [lm[i].x * vw * s + ox, lm[i].y * vh * s + oy];
   const side = m && m.side === 'right' ? [12, 24, 26, 28, 32] : [11, 23, 25, 27, 31];
-  const kneeColor = m && m.visible && (m.knee <= counter.t.depthKnee || m.hipBelowKnee) ? '#6FCF97' : '#6FA0FF';
+  const ok = m && m.visible && m.sideView;
+  const kneeColor = ok && (m.knee <= counter.t.depthKnee || m.hipY >= m.kneeY - 0.01) ? '#6FCF97' : '#6FA0FF';
   ctx.lineWidth = 6; ctx.lineCap = 'round';
   const seg = (a, b, col) => { const [x1, y1] = P(a), [x2, y2] = P(b); ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
-  seg(side[0], side[1], m && m.torsoLean > counter.t.torsoLeanMax ? '#FFA94D' : '#6FA0FF');
+  seg(side[0], side[1], ok && m.torsoLean - m.shinLean > counter.t.leanTol ? '#FFA94D' : '#6FA0FF');
   seg(side[1], side[2], kneeColor); seg(side[2], side[3], kneeColor); seg(side[3], side[4], '#6FA0FF');
   side.slice(0, 4).forEach(i => { const [x, y] = P(i); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill(); });
 }
@@ -239,23 +240,27 @@ function loop() {
     lastVideoTime = v.currentTime;
     const res = landmarker.detectForVideo(v, now);
     const lm = res.landmarks && res.landmarks[0];
-    const m = lm ? measure(lm) : null;
+    const m = lm ? measure(lm, v.videoWidth / v.videoHeight) : null;
     draw(lm, m);
     if ($('debug').style.display === 'block') {
       $('debug').textContent = m && m.visible
-        ? `무릎각 ${m.knee.toFixed(0)}°\n상체 기울기 ${m.torsoLean.toFixed(0)}°\n엉덩이≤무릎 ${m.hipBelowKnee ? '예' : '아니오'}\n단계 ${counter.phase}`
-        : '전신 인식 안 됨';
+        ? `무릎각 ${m.knee.toFixed(0)}°\n상체-정강이 ${(m.torsoLean - m.shinLean).toFixed(0)}°\n측면 ${m.sideView ? '예' : '아니오'} (${m.spread.toFixed(2)})\n단계 ${counter.state}`
+        : '전신 인식 안 됨 (' + (m ? m.reason : '') + ')';
     }
     const r = counter.update(m, now);
-    if (r.event === 'not_visible') {
+    if (r.event === 'not_visible' || r.event === 'not_side') {
       if (now - notVisibleSince > 1500) {
-        setStatus('전신이 화면에 들어오게 해주세요', true);
-        if (now - lastWarnSpoken > 8000) { say('전신이 보이게 해주세요'); lastWarnSpoken = now; }
+        const msg = r.event === 'not_side' ? '몸 옆면이 카메라를 향하게 서주세요' : '머리부터 발끝까지 화면에 들어오게 해주세요';
+        setStatus(msg, true);
+        if (now - lastWarnSpoken > 8000) { say(r.event === 'not_side' ? '옆으로 서주세요' : '전신이 보이게 해주세요'); lastWarnSpoken = now; }
       }
     } else {
       notVisibleSince = now;
-      if (r.event === 'rep') onRep(r);
-      else if ($('status').classList.contains('warn')) setStatus('좋아요, 시작하세요');
+      if (r.event === 'setup') setStatus(r.hint === 'hold' ? `그대로 서 계세요... ${Math.round((1 - r.progress) * 10) / 10}초` : '똑바로 서서 잠깐 멈춰주세요');
+      else if (r.event === 'ready') { setStatus('준비 완료! 시작하세요'); say('준비 완료. 시작하세요', true); }
+      else if (r.event === 'lost') { setStatus('다시 똑바로 서서 잠깐 멈춰주세요', true); }
+      else if (r.event === 'shallow') { setStatus(CUE_TEXT.shallow, true); if (r.speak) say(CUE_TEXT.shallow, true); }
+      else if (r.event === 'rep') onRep(r);
     }
   }
   rafId = requestAnimationFrame(loop);
@@ -267,7 +272,7 @@ function onRep(r) {
   // 반복마다 한마디: 횟수 + (필요하면) 교정 한 가지
   const cue = r.speakCue ? CUE_TEXT[r.speakCue] : null;
   say((NUM[n] || String(n)) + (cue ? '. ' + cue : ''), true);
-  setStatus(cue ? cue : (r.rep.cue ? CUE_TEXT[r.rep.cue] : '좋아요'), !!r.rep.cue);
+  setStatus(`${r.rep.score}점 · ` + (r.rep.cue ? CUE_TEXT[r.rep.cue] : '좋아요'), !!r.rep.cue);
   if (n >= target) { setTimeout(() => { say('세트 완료! 수고했어요.', true); endSet(); }, 900); }
 }
 
@@ -283,13 +288,13 @@ function endSet() {
   results = log.map(() => null);
   $('sReps').textContent = log.length;
   $('sDepth').textContent = `${log.filter(r => r.depthOk).length}회`;
-  $('sKnee').textContent = log.length ? Math.round(log.reduce((a, r) => a + r.minKnee, 0) / log.length) + '°' : '-';
+  $('sKnee').textContent = log.length ? Math.round(log.reduce((a, r) => a + r.score, 0) / log.length) + '점' : '-';
   const list = $('repList'); list.innerHTML = '';
   if (!log.length) list.innerHTML = '<p class="note">기록된 반복이 없어요.</p>';
   log.forEach((r, i) => {
     const row = document.createElement('div'); row.className = 'rep';
-    const judge = r.cue ? CUE_TEXT[r.cue] : '좋은 자세';
-    row.innerHTML = `<span class="n">${r.n}</span><span class="d">${judge}<br><small>최저 무릎각 ${r.minKnee}° · 상체 ${r.maxLean}°</small></span>`;
+    const judge = r.faults.length ? r.faults.map(f => CUE_TEXT[f]).join(', ') : '좋은 자세';
+    row.innerHTML = `<span class="n">${r.n}</span><span class="d"><b>${r.score}점</b> ${judge}<br><small>무릎 ${r.minKnee}° · 하강 ${r.drop}% · 상체-정강이 ${r.leanGap}°</small></span>`;
     const yes = document.createElement('button'); yes.textContent = '맞음';
     const no = document.createElement('button'); no.textContent = '틀림';
     yes.onclick = () => { results[i] = true; yes.className = 'sel'; no.className = ''; acc(); };
@@ -309,8 +314,8 @@ $('againBtn').onclick = () => { show('intro'); $('startBtn').disabled = false; $
 $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cancel(); $('muteBtn').textContent = voice ? '음성 끄기' : '음성 켜기'; $('voiceChip').textContent = voice ? '음성 켜짐' : '음성 꺼짐'; };
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
-  const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.cue ? CUE_TEXT[r.cue] : '좋은 자세'} / 무릎 ${r.minKnee}° / 상체 ${r.maxLean}° / 판정 ${results[i] === null ? '-' : results[i] ? '맞음' : '틀림'}`);
-  const text = `스쿼트 데모 결과 (${new Date().toLocaleString('ko-KR')})\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.score}점 ${r.faults.join('+') || 'ok'} / 무릎 ${r.minKnee}° / 하강 ${r.drop}% / 상체-정강이 ${r.leanGap}° / 뒤꿈치 ${r.heel} / 하강시간 ${r.descentMs}ms / 판정 ${results[i] === null ? '-' : results[i] ? '맞음' : '틀림'}`);
+  const text = `스쿼트 데모 v2 결과 [${mode}] (${new Date().toLocaleString('ko-KR')})\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
