@@ -29,6 +29,7 @@ export const THRESHOLDS = {
   // 주저앉기: 통제 없이 바닥 근처까지 떨어지는 반복 (v4: 실측에서 무릎 34~49°, 하강 76~81% 반복이 모두 '틀린 자세')
   collapseKnee: 50,
   collapseDrop: 0.70,
+  noRepDepthOver: 15,   // v6: 깊이 기준보다 15° 넘게 덜 앉으면 세지 않음 (편하게 120°, 정확하게 105°)
   heelLift: 0.04,       // 뒤꿈치가 처음 높이보다 다리 길이의 4% 이상 올라가면 들린 것으로 봄
   // v2 실제 테스트에서 발가락-뒤꿈치 높이 차로 재던 방식이 모든 반복에서 오탐(7~26%) → v3는 뒤꿈치 자체의
   // 높이 변화로 바꾸고, 실제 데이터로 검증될 때까지 점수에는 넣지 않고 기록만 함
@@ -42,9 +43,10 @@ export const MODES = {
   // 편하게: 무릎 105° 이하면 충분한 깊이, 상체가 정강이보다 10° 넘게 더 숙이거나 수직에서 50° 넘게 기울면 지적
   // v5: 3차 실측에서 상체를 숙인 반복이 정강이 대비 11~19°로 측정돼 통과 → 20°에서 10°로.
   // 정강이 대비 차이만으로는 깊이 앉을 때 숙임을 놓치므로, 상체 자체의 기울기(수직 기준) 상한도 둠
-  relaxed: { depthKnee: 105, leanTol: 10, torsoMax: 50 },
+  // v6 노렙: 상체 숙임으로 세지 않는 기준(허용치를 몇 도 넘었는지). 편하게는 숙임만으로는 세지 않는 일은 없음
+  relaxed: { depthKnee: 105, leanTol: 10, torsoMax: 50, noRepLean: Infinity },
   // 정확하게: 허벅지 평행(무릎 90° 이하 또는 엉덩이가 무릎 높이), 정강이보다 7° 또는 수직에서 45° 넘게 숙이면 지적
-  strict: { depthKnee: 90, leanTol: 7, torsoMax: 45 },
+  strict: { depthKnee: 90, leanTol: 7, torsoMax: 45, noRepLean: 5 },
 };
 
 const deg = (r) => (r * 180) / Math.PI;
@@ -101,6 +103,12 @@ export const CUE_TEXT = {
   tempo: '천천히 내려가세요',
   shallow: '더 깊이 앉아야 한 번으로 세요',
 };
+// 기준 미달로 세지 않을 때 하는 말
+export const NOREP_TEXT = {
+  collapse: '주저앉아서 이번은 세지 않아요',
+  depth: '더 깊이 앉아야 세요',
+  chest: '상체를 많이 숙여서 이번은 세지 않아요',
+};
 
 export class SquatCounter {
   constructor(mode = 'relaxed') { this.setMode(mode); this.reset(); }
@@ -108,6 +116,7 @@ export class SquatCounter {
   reset() {
     this.state = 'setup';        // setup → ready(up) ↔ down
     this.reps = 0;
+    this.attempts = 0;
     this.repLog = [];
     this.base = null;            // 준비 자세 기준값
     this.readySince = null;
@@ -223,13 +232,19 @@ export class SquatCounter {
     } else {
       this.cueStreak = { cue, count: cue ? 1 : 0 };
     }
-    this.reps += 1;
+    // 세지 않는 반복(노렙): 주저앉기, 깊이가 크게 모자람, (정확하게 모드) 상체를 많이 숙임
+    let noRep = null;
+    if (faults.includes('collapse')) noRep = 'collapse';
+    else if (!depthOk && c.minKnee > t.depthKnee + t.noRepDepthOver) noRep = 'depth';
+    else if (leanOver >= t.noRepLean) noRep = 'chest';
+    this.attempts += 1;
+    if (!noRep) this.reps += 1;
     const rec = {
-      n: this.reps, score, faults, cue, depthOk,
+      n: this.attempts, count: this.reps, counted: !noRep, noRep, score, faults, cue, depthOk,
       minKnee: Math.round(c.minKnee), drop: Math.round(c.maxDrop * 100), leanGap: Math.round(c.maxLeanGap), torso: Math.round(c.maxTorso),
       heel: Math.round(c.maxHeel * 1000) / 10, descentMs: Math.round(c.bottomAt - c.startAt),
     };
     this.repLog.push(rec);
-    return { event: 'rep', rep: rec, speakCue };
+    return { event: noRep ? 'norep' : 'rep', rep: rec, speakCue };
   }
 }
