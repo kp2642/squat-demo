@@ -65,7 +65,7 @@ label.lbl{font-size:14px;font-weight:600}
 <body>
 
 <section id="intro" class="screen on">
-  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v9</small></h1>
+  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v10</small></h1>
   <div>
     <label class="lbl">종목</label>
     <div class="seg" id="exercise" style="grid-template-columns:1fr 1fr">
@@ -150,15 +150,15 @@ label.lbl{font-size:14px;font-weight:600}
 </section>
 
 <script type="module">
-import * as SQ from './squat-logic.js?v=9';
-import * as PU from './pushup-logic.js?v=9';
+import * as SQ from './squat-logic.js?v=10';
+import * as PU from './pushup-logic.js?v=10';
 
 // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식
 const EXERCISES = {
   squat: {
     name: '스쿼트', lib: SQ, Counter: SQ.SquatCounter,
     intro: '휴대폰을 세로로 세워두고 몸 옆면이 보이게 서서, 똑바로 선 채 1초 멈추면 시작해요. 어깨부터 발목까지만 보이면 돼요(초광각이면 1m까지 가까이). 스쿼트를 하면 횟수를 세고, 자세를 소리로 알려드려요. 영상은 이 휴대폰 밖으로 나가지 않아요.',
-    tips: ['1.5m', '허리 높이'], down: [11, 12, 27, 28], // 어깨 → 발목이 아래쪽
+    tips: ['1.5m', '허리 높이'], axis: 'y', core: () => [11, 23, 25, 27], down: [11, 12, 27, 28], // 어깨 → 발목이 아래쪽
     modeNote: {
       relaxed: '편안한 깊이까지 앉으면 인정해요. 운동이 처음이거나 유연성이 부족하면 이걸로 시작하세요.',
       strict: '허벅지가 바닥과 평행할 만큼 앉아야 인정하고, 상체 숙임도 더 엄격하게 봐요.',
@@ -182,7 +182,7 @@ const EXERCISES = {
   pushup: {
     name: '푸시업', lib: PU, Counter: PU.PushupCounter,
     intro: '휴대폰을 바닥에 가로로 세워두고 몸 옆면이 보이게 엎드려요(초광각이면 1m까지 가까이). 팔을 편 자세로 1초 멈추면 시작해요. 팔꿈치 각도로 깊이를, 어깨-엉덩이-발목 선으로 엉덩이 처짐을 봐요. 영상은 이 휴대폰 밖으로 나가지 않아요.',
-    tips: ['가로 1.5m', '바닥'], down: [11, 12, 15, 16], // 어깨 → 손목이 아래쪽(바닥)
+    tips: ['가로 1.5m', '바닥'], axis: 'x', core: () => [11, 13, 15, 23, pstyle === 'knees' ? 25 : 27], down: [11, 12, 15, 16], // 어깨 → 손목이 아래쪽(바닥)
     modeNote: {
       relaxed: '팔꿈치가 100° 정도까지 굽으면 인정해요. 허리가 크게 처지면 세지 않아요.',
       strict: '팔꿈치가 90°까지 굽어야 인정하고, 몸통이 일직선에서 벗어나면 세지 않아요.',
@@ -286,7 +286,7 @@ async function start() {
   counter = new (EX().Counter)(mode); CUE_TEXT = EX().lib.CUE_TEXT; NOREP_TEXT = EX().lib.NOREP_TEXT; results = [];
   $('count').innerHTML = `0<small> / ${target}</small>`;
   setStatus(ultraMissing ? '초광각 카메라를 찾지 못해 일반 뒷면 카메라로 시작해요' : EX().startStatus, ultraMissing);
-  show('live'); running = true; notVisibleSince = performance.now();
+  show('live'); running = true; notVisibleSince = performance.now(); guide = { k: null, since: 0, spokenK: null, spokenAt: 0, guided: false };
   say(EX().startSay);
   loop();
 }
@@ -316,6 +316,41 @@ function upright(lm, aspect) {
   if (k === 0) return { lm, aspect, k };
   const f = [null, (p) => ({ x: 1 - p.y, y: p.x }), (p) => ({ x: 1 - p.x, y: 1 - p.y }), (p) => ({ x: p.y, y: 1 - p.x })][k];
   return { lm: lm.map(p => ({ ...p, ...f(p) })), aspect: k % 2 ? 1 / aspect : aspect, k };
+}
+
+// 자리 잡기 안내: 판정에 필요한 관절이 화면 어디에 있는지 보고 "가까이/멀리/잘림"을 알려줌 (화면을 못 보는 뒷면 카메라 사용자용)
+// 거리 기준: 몸 길이(스쿼트는 세로, 푸시업은 가로)가 화면의 35~92%를 차지하면 적당
+function framing(up) {
+  if (!up) return { k: 'none', text: '화면에 사람이 보이지 않아요', say: '카메라 앞에 옆모습이 보이게 서 주세요' };
+  const L = EX().core(), Rr = L.map(i => i + 1);
+  const vis = (ids) => ids.reduce((t, i) => t + (up.lm[i].visibility ?? 0), 0);
+  const pts = (vis(L) >= vis(Rr) ? L : Rr).map(i => up.lm[i]);
+  const ax = EX().axis, cross = ax === 'y' ? 'x' : 'y';
+  const along = pts.map(p => p[ax]), span = Math.max(...along) - Math.min(...along);
+  const lo = (p, a) => p[a] < 0.02, hi = (p, a) => p[a] > 0.98;
+  const cutLo = pts.some(p => lo(p, ax)), cutHi = pts.some(p => hi(p, ax));
+  const cutCross = pts.some(p => lo(p, cross) || hi(p, cross));
+  if (span > 0.92 || (cutLo && cutHi)) return { k: 'close', text: '너무 가까워요. 조금 더 멀리 가 주세요', say: '조금 더 멀리 가 주세요' };
+  if (ax === 'y' && cutLo) return { k: 'top', text: '어깨가 화면 위로 잘려요. 조금 뒤로 가거나 휴대폰을 조금 높여 주세요', say: '어깨가 잘려요. 조금 뒤로 가 주세요' };
+  if (ax === 'y' && cutHi) return { k: 'bottom', text: '발목이 화면 아래로 잘려요. 조금 뒤로 가거나 휴대폰을 조금 낮춰 주세요', say: '발목이 잘려요. 조금 뒤로 가 주세요' };
+  if (cutLo || cutHi || cutCross) return { k: 'side', text: '몸이 화면 밖으로 잘려요. 화면 가운데로 조금 옮겨 주세요', say: '몸이 잘려요. 화면 가운데로 조금 옮겨 주세요' };
+  if (span < 0.35) return { k: 'far', text: '조금 더 가까이 와 주세요', say: '조금 더 가까이 와 주세요' };
+  if (Math.min(...pts.map(p => p.visibility ?? 0)) < 0.6) return { k: 'dim', text: '몸이 잘 안 보여요. 밝은 곳에서 옆모습이 보이게 해주세요', say: '몸이 잘 안 보여요. 옆모습이 보이게 해주세요' };
+  return { k: 'ok' };
+}
+// 같은 안내는 5초마다, 바뀐 안내는 1초 유지되면 바로 말함. 안내 후 자리가 맞으면 "좋아요" 한 번
+let guide = { k: null, since: 0, spokenK: null, spokenAt: 0, guided: false };
+function speakGuide(f, now) {
+  if (f.k !== guide.k) { guide.k = f.k; guide.since = now; }
+  if (f.k === 'ok') {
+    if (guide.guided && now - guide.since > 700) { say('좋아요, 그 자리예요', true); guide.guided = false; guide.spokenK = 'ok'; }
+    return;
+  }
+  setStatus(f.text, true);
+  const changed = guide.spokenK !== f.k;
+  if ((changed && now - guide.since > 1000) || (!changed && now - guide.spokenAt > 5000)) {
+    say(f.say, true); guide.spokenK = f.k; guide.spokenAt = now; guide.guided = true;
+  }
 }
 
 function setStatus(text, warn = false) { const s = $('status'); s.textContent = text; s.classList.toggle('warn', warn); }
@@ -352,13 +387,15 @@ function loop() {
         : '전신 인식 안 됨 (' + (m ? m.reason : '') + ')';
     }
     const r = counter.update(m, now);
-    if (r.event === 'not_visible' || r.event === 'not_side') {
-      if (now - notVisibleSince > 1500) {
-        const msg = r.event === 'not_side' ? EX().notSide[0] : '어깨부터 발목까지 화면에 들어오게 해주세요';
-        setStatus(msg, true);
-        if (now - lastWarnSpoken > 8000) { say(r.event === 'not_side' ? EX().notSide[1] : '어깨부터 발목까지 보이게 해주세요'); lastWarnSpoken = now; }
-      }
+    const fr = r.event === 'not_visible' || (r.event === 'setup' && r.hint !== 'hold') ? framing(up) : { k: 'ok' };
+    if (r.event === 'not_visible') {
+      if (now - notVisibleSince > 1000) speakGuide(fr.k === 'ok' ? { k: 'dim', text: '어깨부터 발목까지 화면에 들어오게 해주세요', say: '어깨부터 발목까지 보이게 해주세요' } : fr, now);
+    } else if (r.event === 'not_side') {
+      if (now - notVisibleSince > 1500) speakGuide({ k: 'notside', text: EX().notSide[0], say: EX().notSide[1] }, now);
+    } else if (r.event === 'setup' && fr.k === 'far') {
+      speakGuide(fr, now);
     } else {
+      if (r.event === 'setup' || r.event === 'ready') speakGuide({ k: 'ok' }, now);
       notVisibleSince = now;
       if (r.event === 'setup') setStatus(r.hint === 'hold' ? `그대로 계세요... ${Math.round((1 - r.progress) * 10) / 10}초` : EX().setupMsg);
       else if (r.event === 'ready') { setStatus('준비 완료! 시작하세요'); say('준비 완료. 시작하세요', true); }
