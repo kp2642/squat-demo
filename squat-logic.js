@@ -1,4 +1,4 @@
-// 스쿼트 판정 로직 v4 (브라우저·Node 공용, 외부 의존성 없음)
+// 스쿼트 판정 로직 v5 (브라우저·Node 공용, 외부 의존성 없음)
 // 입력: MediaPipe Pose 랜드마크 33개 [{x, y, z, visibility}], 좌표는 0~1 정규화(y는 아래로 증가)
 //
 // v1에서 바뀐 점
@@ -39,10 +39,12 @@ export const THRESHOLDS = {
 
 // 판정 강도 (사용자가 플랜 설정에서 선택). 횟수 인정 기준은 같고, 자세 평가만 달라짐
 export const MODES = {
-  // 편하게: 무릎 105° 이하면 충분한 깊이, 상체가 정강이보다 20° 넘게 더 숙여지면 지적
-  relaxed: { depthKnee: 105, leanTol: 20 }, // v4: 실측에서 19°는 맞음, 24°는 너그러움 → 25°에서 20°로
-  // 정확하게: 허벅지 평행(무릎 90° 이하 또는 엉덩이가 무릎 높이), 12° 넘게 숙여지면 지적
-  strict: { depthKnee: 90, leanTol: 12 },
+  // 편하게: 무릎 105° 이하면 충분한 깊이, 상체가 정강이보다 10° 넘게 더 숙이거나 수직에서 50° 넘게 기울면 지적
+  // v5: 3차 실측에서 상체를 숙인 반복이 정강이 대비 11~19°로 측정돼 통과 → 20°에서 10°로.
+  // 정강이 대비 차이만으로는 깊이 앉을 때 숙임을 놓치므로, 상체 자체의 기울기(수직 기준) 상한도 둠
+  relaxed: { depthKnee: 105, leanTol: 10, torsoMax: 50 },
+  // 정확하게: 허벅지 평행(무릎 90° 이하 또는 엉덩이가 무릎 높이), 정강이보다 7° 또는 수직에서 45° 넘게 숙이면 지적
+  strict: { depthKnee: 90, leanTol: 7, torsoMax: 45 },
 };
 
 const deg = (r) => (r * 180) / Math.PI;
@@ -160,7 +162,7 @@ export class SquatCounter {
       if (drop > 0.02) { if (this.leaveAt == null) this.leaveAt = now; } else this.leaveAt = null;
       if (drop > t.startDrop && s.knee < t.topKnee) {
         this.state = 'down';
-        this.cur = { startAt: this.leaveAt ?? now, bottomAt: now, maxDrop: drop, minKnee: s.knee, maxLeanGap: s.torsoLean - s.shinLean, maxHeel: (this.base.heelY - s.heelY) / this.base.legLen, hipBelowKnee: false };
+        this.cur = { startAt: this.leaveAt ?? now, bottomAt: now, maxDrop: drop, minKnee: s.knee, maxLeanGap: s.torsoLean - s.shinLean, maxTorso: s.torsoLean, maxHeel: (this.base.heelY - s.heelY) / this.base.legLen, hipBelowKnee: false };
       } else if (drop < t.startDrop / 2) {
         // 서 있는 동안 기준 높이를 천천히 갱신 (자세를 고쳐 서는 경우 대비)
         this.base.hipY = 0.95 * this.base.hipY + 0.05 * s.hipY;
@@ -176,6 +178,7 @@ export class SquatCounter {
     // 자세 평가는 충분히 내려간 구간에서만
     if (drop > t.countDrop * 0.7) {
       c.maxLeanGap = Math.max(c.maxLeanGap, s.torsoLean - s.shinLean);
+      c.maxTorso = Math.max(c.maxTorso, s.torsoLean);
       c.maxHeel = Math.max(c.maxHeel, (this.base.heelY - s.heelY) / this.base.legLen);
     }
     if (drop < t.returnDrop) {
@@ -200,13 +203,14 @@ export class SquatCounter {
     if (c.minKnee < t.collapseKnee || c.maxDrop > t.collapseDrop) faults.push('collapse');
     if (!depthOk) faults.push('depth');
     if (t.heelScored && c.maxHeel > t.heelLift) faults.push('heel');
-    if (c.maxLeanGap > t.leanTol) faults.push('chest');
+    const leanOver = Math.max(c.maxLeanGap - t.leanTol, c.maxTorso - t.torsoMax);
+    if (leanOver > 0) faults.push('chest');
     if (c.bottomAt - c.startAt < t.fastDescentMs) faults.push('tempo');
     // 점수: 100점에서 항목별 감점
     let score = 100;
     if (!depthOk) score -= Math.min(40, (c.minKnee - t.depthKnee) * 1.5 + 10);
     if (faults.includes('heel')) score -= 15;
-    if (faults.includes('chest')) score -= Math.min(30, (c.maxLeanGap - t.leanTol) * 1.5 + 10);
+    if (faults.includes('chest')) score -= Math.min(30, leanOver * 1.5 + 10);
     if (faults.includes('tempo')) score -= 10;
     if (faults.includes('collapse')) score -= 35;
     score = Math.max(0, Math.round(score));
@@ -222,7 +226,7 @@ export class SquatCounter {
     this.reps += 1;
     const rec = {
       n: this.reps, score, faults, cue, depthOk,
-      minKnee: Math.round(c.minKnee), drop: Math.round(c.maxDrop * 100), leanGap: Math.round(c.maxLeanGap),
+      minKnee: Math.round(c.minKnee), drop: Math.round(c.maxDrop * 100), leanGap: Math.round(c.maxLeanGap), torso: Math.round(c.maxTorso),
       heel: Math.round(c.maxHeel * 1000) / 10, descentMs: Math.round(c.bottomAt - c.startAt),
     };
     this.repLog.push(rec);
