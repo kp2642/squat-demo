@@ -1,4 +1,4 @@
-// 스쿼트 판정 로직 v2 (브라우저·Node 공용, 외부 의존성 없음)
+// 스쿼트 판정 로직 v3 (브라우저·Node 공용, 외부 의존성 없음)
 // 입력: MediaPipe Pose 랜드마크 33개 [{x, y, z, visibility}], 좌표는 0~1 정규화(y는 아래로 증가)
 //
 // v1에서 바뀐 점
@@ -26,7 +26,10 @@ export const THRESHOLDS = {
   returnDrop: 0.08,     // 엉덩이가 처음 높이 근처(8% 이내)로 돌아와야 반복 완료
   minRepMs: 500,        // 이보다 빠른 반복은 흔들림으로 보고 무시
   fastDescentMs: 600,   // 이보다 빨리 내려가면 "천천히" 지적
-  heelLift: 0.035,      // 뒤꿈치가 처음보다 다리 길이의 3.5% 이상 올라가면 지적
+  heelLift: 0.04,       // 뒤꿈치가 처음 높이보다 다리 길이의 4% 이상 올라가면 들린 것으로 봄
+  // v2 실제 테스트에서 발가락-뒤꿈치 높이 차로 재던 방식이 모든 반복에서 오탐(7~26%) → v3는 뒤꿈치 자체의
+  // 높이 변화로 바꾸고, 실제 데이터로 검증될 때까지 점수에는 넣지 않고 기록만 함
+  heelScored: false,
   lostMs: 1200,         // 이만큼 안 보이면 준비 단계로 돌아감
   smoothing: 0.5,       // 지수 이동 평균 계수 (클수록 반응 빠름)
 };
@@ -79,7 +82,7 @@ export function measure(lm, aspect = 1) {
     shinLean: fromVertical(j.knee, j.ankle),
     hipY: j.hip.y,
     kneeY: j.knee.y,
-    heelLift: (j.toe.y - j.heel.y) / legLen, // 뒤꿈치가 들리면 커짐
+    heelY: j.heel.y,
     legLen,
   };
 }
@@ -113,7 +116,7 @@ export class SquatCounter {
   _smooth(m) {
     const a = this.t.smoothing;
     if (!this.s) { this.s = { ...m }; return this.s; }
-    for (const k of ['knee', 'torsoLean', 'shinLean', 'hipY', 'kneeY', 'heelLift', 'legLen']) this.s[k] = a * m[k] + (1 - a) * this.s[k];
+    for (const k of ['knee', 'torsoLean', 'shinLean', 'hipY', 'kneeY', 'heelY', 'legLen']) this.s[k] = a * m[k] + (1 - a) * this.s[k];
     return this.s;
   }
 
@@ -140,7 +143,7 @@ export class SquatCounter {
       const range = (Math.max(...this.readyHip) - Math.min(...this.readyHip)) / s.legLen;
       if (range > t.readyMotion) { this.readySince = now; this.readyHip = [s.hipY]; return { event: 'setup', hint: 'still' }; }
       if (now - this.readySince >= t.readyMs) {
-        this.base = { hipY: this.readyHip.reduce((a, b) => a + b, 0) / this.readyHip.length, legLen: s.legLen, heel: s.heelLift };
+        this.base = { hipY: this.readyHip.reduce((a, b) => a + b, 0) / this.readyHip.length, legLen: s.legLen, heelY: s.heelY };
         this.state = 'up';
         return { event: 'ready' };
       }
@@ -153,7 +156,7 @@ export class SquatCounter {
       if (drop > 0.02) { if (this.leaveAt == null) this.leaveAt = now; } else this.leaveAt = null;
       if (drop > t.startDrop && s.knee < t.topKnee) {
         this.state = 'down';
-        this.cur = { startAt: this.leaveAt ?? now, bottomAt: now, maxDrop: drop, minKnee: s.knee, maxLeanGap: s.torsoLean - s.shinLean, maxHeel: s.heelLift - this.base.heel, hipBelowKnee: false };
+        this.cur = { startAt: this.leaveAt ?? now, bottomAt: now, maxDrop: drop, minKnee: s.knee, maxLeanGap: s.torsoLean - s.shinLean, maxHeel: (this.base.heelY - s.heelY) / this.base.legLen, hipBelowKnee: false };
       } else if (drop < t.startDrop / 2) {
         // 서 있는 동안 기준 높이를 천천히 갱신 (자세를 고쳐 서는 경우 대비)
         this.base.hipY = 0.95 * this.base.hipY + 0.05 * s.hipY;
@@ -169,7 +172,7 @@ export class SquatCounter {
     // 자세 평가는 충분히 내려간 구간에서만
     if (drop > t.countDrop * 0.7) {
       c.maxLeanGap = Math.max(c.maxLeanGap, s.torsoLean - s.shinLean);
-      c.maxHeel = Math.max(c.maxHeel, s.heelLift - this.base.heel);
+      c.maxHeel = Math.max(c.maxHeel, (this.base.heelY - s.heelY) / this.base.legLen);
     }
     if (drop < t.returnDrop) {
       // 다시 일어섬
@@ -191,7 +194,7 @@ export class SquatCounter {
     const faults = [];
     const depthOk = c.minKnee <= t.depthKnee || c.hipBelowKnee;
     if (!depthOk) faults.push('depth');
-    if (c.maxHeel > t.heelLift) faults.push('heel');
+    if (t.heelScored && c.maxHeel > t.heelLift) faults.push('heel');
     if (c.maxLeanGap > t.leanTol) faults.push('chest');
     if (c.bottomAt - c.startAt < t.fastDescentMs) faults.push('tempo');
     // 점수: 100점에서 항목별 감점
