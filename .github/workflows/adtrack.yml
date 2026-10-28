@@ -33,7 +33,11 @@ jobs:
           cache: npm
           cache-dependency-path: adtrack/package-lock.json
       - run: npm ci
+      - name: 추적 코드 빌드 결과가 커밋되어 있는지
+        run: npm run build:tracker && git diff --exit-code src/generated/
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:db
       - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

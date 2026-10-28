@@ -4,7 +4,8 @@ import { siteOrigin } from '@/lib/origin';
 import { Messages } from '../../messages';
 import { CopyButton } from '../copy-button';
 import {
-  addInquiryType, addSite, cancelInvite, inviteMember, removeInquiryType, removeMember, removeSite, updateWorkspace,
+  addInquiryType, addSite, cancelInvite, inviteMember, removeInquiryType, removeMember, removeSite, updateThankYou,
+  updateWorkspace,
 } from './actions';
 
 type Props = { searchParams: Promise<Record<string, string | undefined>> };
@@ -37,6 +38,7 @@ export default async function SetupPage({ searchParams }: Props) {
     { label: '이번 달 광고비 입력', done: false },
   ];
   const doneCount = steps.filter((s) => s.done).length;
+  const snippet = `<script async src="${origin}/t/${workspace.tracking_key}.js"></script>`;
 
   return (
     <>
@@ -98,9 +100,33 @@ export default async function SetupPage({ searchParams }: Props) {
           <input name="domain" placeholder="example.com" aria-label="홈페이지 주소" required />
           <button>추가</button>
         </form>
-        <p className="muted" style={{ marginBottom: 0 }}>
-          추적 키 <code>{workspace.tracking_key}</code> — 홈페이지에 넣을 코드는 2단계에서 여기에 나와요.
+      </section>
+
+      <section className="card">
+        <h2>추적 코드</h2>
+        <p className="muted">
+          홈페이지의 모든 페이지 <code>&lt;head&gt;</code> 안에 아래 한 줄을 넣어 주세요. 코드가 처음 신호를 보내면 위 홈페이지에 ‘설치 확인됨’이 떠요.
         </p>
+        <pre className="snippet"><code>{snippet}</code></pre>
+        <CopyButton text={snippet} label="코드 복사" />
+        <form action={updateThankYou} style={{ marginTop: 16 }}>
+          <label htmlFor="thank-you">
+            문의 완료 페이지 주소 <span className="hint">폼을 자동으로 못 찾는 홈페이지(아임웹·식스샵, 게시판형 문의)만. 이 페이지에 도착하면 문의 1건으로 세요.</span>
+          </label>
+          <div className="row">
+            <input id="thank-you" name="thank_you_url" type="url" defaultValue={workspace.thank_you_url ?? ''} placeholder="https://example.com/thanks" />
+            <button>저장</button>
+          </div>
+        </form>
+        {sites.length > 0 && (
+          <p className="muted" style={{ marginBottom: 0 }}>
+            내 방문은 집계에서 빼기: 이 브라우저로{' '}
+            {sites.map((s, i) => (
+              <span key={s.id}>{i > 0 && ', '}<a href={`https://${s.domain}/?atk_exclude=1`} target="_blank" rel="noreferrer">{s.domain}</a></span>
+            ))}{' '}
+            을(를) 한 번 열어 주세요.
+          </p>
+        )}
       </section>
 
       <section className="card">

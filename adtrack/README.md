@@ -12,7 +12,7 @@
 | 단계 | 내용 | 상태 |
 |---|---|---|
 | 1 | 기반: 가입·로그인, 사업장 생성, 업종 프리셋, 직원 초대, 사업장 데이터 분리 | 완료 |
-| 2 | 추적 코드 + 수집 API | |
+| 2 | 추적 코드 + 수집 API: 꼬리표 저장, 폼 자동 감지, 완료 페이지 방식, 출처 판별 규칙표, 중복 합치기 | 완료 |
 | 3 | 문의함 | |
 | 4 | 광고비 | |
 | 5 | 성과 화면 | |
@@ -28,6 +28,20 @@
 - **역할**: 관리자는 4개 탭 전부, 직원은 문의함만. 직원은 자기 이름 외에는 설정을 바꿀 수 없다.
 - **데이터 분리**: 모든 사업장 테이블에 `workspace_id` 와 RLS 정책. 사업장·사용자 생성과 초대 수락은 `security definer` 함수(`create_workspace`, `accept_invitation`)로만 가능하고, 수정 가능한 열도 grant 로 제한한다(역할·추적 키·`workspace_id` 는 바꿀 수 없음).
 
+## 2단계에서 만든 것
+
+- **추적 코드** (`tracker/tracker.js` → `npm run build:tracker` → `src/generated/tracker.ts`): 의존성 없는 순수 JS, 압축 후 약 4.3KB(gzip 2.3KB).
+  `<script async src="https://<서비스>/t/<추적키>.js">` 로 넣으면 `/t/[file]` 경로가 사업장 설정(완료 페이지 주소)을 넣어 내려주고 5분 캐시한다.
+  - 방문 시 꼬리표(`n_*`, `utm_*`, `gclid`, `fbclid`)와 외부 유입 주소를 첫 파티 쿠키(90일)에 ‘첫 유입’(`_atk_f`)과 ‘마지막 광고 유입’(`_atk_l`)으로 저장. 꼬리표 없는 재방문은 꼬리표 있는 마지막 광고 유입을 덮어쓰지 않는다. `www.`·`m.` 같은 하위 도메인끼리 쿠키를 같이 쓴다.
+  - 폼 제출(`submit`, 캡처 단계)을 지켜보다 이름·연락처·상담 유형 칸을 이름/라벨/placeholder 로 추측해 `sendBeacon` 으로 보낸다. 원래 제출은 막지 않는다. `010 / 1234 / 5678` 처럼 나뉜 칸도 잇는다. 연락처가 없는 폼(검색창 등)과 비밀번호 칸이 있는 폼은 무시한다.
+  - 문의 완료 페이지 방식: 설치 탭에 주소를 넣으면 그 페이지 도착을 문의 1건으로 센다(이름·연락처는 빈 채로). 방금 폼으로 보냈거나 새로고침이면 다시 세지 않는다.
+  - 꼬리표가 있는 방문은 `visits` 에 기록(개인정보 없음), 하루 한 번 신호로 ‘설치 확인됨’.
+  - 관리자 본인 제외: 홈페이지를 `?atk_exclude=1` 로 한 번 열면 그 브라우저는 집계하지 않는다 (`?atk_exclude=0` 으로 해제).
+- **수집 API** (`/api/collect`): 다른 도메인에서 오므로 CORS 허용. 요청한 홈페이지(Origin)가 추적 키의 사업장에 등록된 도메인(또는 하위 도메인)일 때만 받는다. 같은 방문자 10분 3건, 같은 IP 10분 20건까지.
+- **출처 판별** (`src/lib/attribution.ts`): 요구사항의 규칙표 1~7 순서. utm_source 는 사업장 채널의 매핑 값으로 채널을 찾고, 매핑이 없거나 규칙에 없는 외부 사이트에서 오면 ‘출처 미확인’(`attribution = 'unknown'`). 판별 근거(예: `n_keyword=이혼전문변호사`)를 문의에 남긴다.
+- **개인정보**: 이름·연락처는 서버에서 AES-256-GCM 으로 암호화해 저장하고(`LEAD_ENCRYPTION_KEY`), 같은 연락처 찾기는 HMAC 해시, 화면 표시는 `010-****-5678`.
+- **중복 합치기**: `(workspace_id, phone_hash)` 유일 인덱스로 같은 연락처는 동시에 들어와도 문의 하나. 두 번째부터는 `lead_touches` 에 다시 연락으로 기록하고 출처는 첫 문의 것을 유지한다.
+
 ## 테스트
 
 ```bash
@@ -42,22 +56,35 @@ npm run typecheck
 shim 은 Supabase 처럼 기본 권한을 모두 열어 두므로, 테스트가 통과하는 건 마이그레이션의 정책 덕분이다.
 `workspace_id` 열이 있는 테이블은 새로 생겨도 자동으로 검사 대상이 된다.
 
-- `DATABASE_URL` 이 없으면 로컬 PostgreSQL 바이너리로 임시 DB 를 띄웠다가 지운다.
+`test:e2e` 는 실제 Chromium 으로 테스트용 홈페이지 3종(`tests/e2e/sites.mjs`: 일반 HTML 폼, 워드프레스 Contact Form 7 모양, 아임웹 모양 빌더형)에
+들어가 꼬리표 7가지 경우 × 3종 = 21건이 모두 올바른 채널로 들어오는지 확인한다. 재방문, 중복 합치기, 검색창 무시, 완료 페이지 새로고침, 관리자 제외, 남의 도메인 거절도 함께 본다.
+먼저 `npm run build` 가 필요하다.
+
+```bash
+npm run build && npm run test:e2e
+```
+
+- `DATABASE_URL` 이 없으면 로컬 PostgreSQL 바이너리로 임시 DB 를 띄웠다가 지운다. 있으면 그 서버에 새 테스트 DB 를 만들었다가 지운다.
 - GitHub Actions(`.github/workflows/adtrack.yml`)에서 push 마다 실행된다.
 
 ## Supabase 연결
 
 1. Supabase 프로젝트를 만들고 `supabase/migrations/` 의 SQL 을 순서대로 실행한다 (SQL Editor 또는 `supabase db push`).
-2. `.env.example` 을 `.env.local` 로 복사해 프로젝트 URL 과 anon 키를 넣는다.
+2. `.env.example` 을 `.env.local` 로 복사해 프로젝트 URL, anon 키, service_role 키, 암호화 키(`openssl rand -base64 32`)를 넣는다.
 3. Authentication → URL Configuration
    - Site URL: 서비스 주소 (로컬은 `http://localhost:3000`)
    - Redirect URLs: `<서비스 주소>/auth/confirm`
 4. Authentication → Providers → Email: **Confirm email 을 켜 둔다.** 초대 수락은 로그인한 이메일과 초대 이메일이 같은지로 확인하기 때문.
 5. `npm run dev`
 
-Vercel 에 배포할 때는 루트 디렉터리를 `adtrack` 으로 두고 같은 환경 변수 두 개를 넣는다.
+Vercel 에 배포할 때는 루트 디렉터리를 `adtrack` 으로 두고 같은 환경 변수를 넣는다. 추적 코드(`/t/...js`)는 Vercel CDN 에서 5분 캐시된다.
 
 ## 다음 단계로 넘긴 것
+
+- 폼 칸을 직접 고르는 화면 (추적 코드는 `fields` 설정을 이미 받을 수 있음, 6단계 설치 탭에서)
+- 연락처는 암호화되어 있어 부분 검색이 안 된다. 문의함(3단계) 검색은 전체 번호(해시 비교)나 뒷자리 4개(`phone_masked`)로 한다
+- 꼬리표 없는 외부 사이트 유입은 ‘출처 미확인’. 자주 나오는 사이트가 보이면 규칙에 추가
+- `rate_limits` 테이블 오래된 행 정리 (하루 한 번 삭제 작업)
 
 - 초대 메일 자동 발송 (지금은 링크 복사)
 - 문의 변경 기록(`lead_events`)은 문의 테이블과 함께 3단계에서

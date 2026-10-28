@@ -31,5 +31,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // 추적 코드(/t/)와 수집 API 는 고객 홈페이지에서 오는 요청이라 로그인 세션이 필요 없다
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/collect|t/).*)'],
 };

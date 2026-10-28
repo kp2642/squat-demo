@@ -36,6 +36,22 @@ export async function updateWorkspace(form: FormData) {
   done('사업장 설정을 저장했어요');
 }
 
+export async function updateThankYou(form: FormData) {
+  const { supabase, workspace } = await requireAdmin();
+  const raw = str(form, 'thank_you_url');
+  let url: string | null = null;
+  if (raw) {
+    try {
+      url = new URL(/^https?:\/\//.test(raw) ? raw : `https://${raw}`).toString();
+    } catch {
+      back(PAGE, { error: '문의 완료 페이지 주소를 확인해 주세요' });
+    }
+  }
+  const { error } = await supabase.from('workspaces').update({ thank_you_url: url }).eq('id', workspace.id);
+  if (error) back(PAGE, { error: errorMessage(error) });
+  done(url ? '문의 완료 페이지를 저장했어요. 추적 코드에 5분 안에 반영돼요' : '문의 완료 페이지 방식을 껐어요');
+}
+
 export async function addSite(form: FormData) {
   const { supabase, workspace } = await requireAdmin();
   const domain = normalizeDomain(str(form, 'domain'));

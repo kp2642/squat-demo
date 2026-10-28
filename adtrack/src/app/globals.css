@@ -76,3 +76,5 @@ code { font-size: 13px; word-break: break-all; }
 .checklist li.done::before { content: '✓'; background: var(--ok); border-color: var(--ok); color: #fff; }
 .progress { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 8px 0 12px; }
 .progress > div { height: 100%; background: var(--ok); }
+.snippet { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; margin: 0 0 8px; }
+.snippet code { white-space: pre-wrap; }

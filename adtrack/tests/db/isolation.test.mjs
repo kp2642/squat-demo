@@ -56,6 +56,15 @@ before(async () => {
   await rows(staffA, 'select public.accept_invitation($1, $2)', [token, '박직원']);
   // B 에도 초대를 하나 남겨 둔다 (A 쪽에서 보이면 안 됨)
   await rows(ownerB, "insert into public.invitations (workspace_id, email) values ($1, 'someone@example.com')", [wsB]);
+
+  // 양쪽 사업장에 문의·다시 연락·방문 기록을 만든다 (수집 함수는 서버만 부를 수 있음)
+  for (const [owner, host] of [[ownerA, 'www.a-law.kr'], [ownerB, 'b-dental.com']]) {
+    const [{ tracking_key: key }] = await rows(owner, 'select tracking_key from public.workspaces');
+    const lead = { phone_hash: `hash-${host}`, phone_masked: '010-****-0000', source: { code: 'naver_sa', evidence: 'n_media=1' } };
+    await db.query('select public.collect_lead($1, $2, $3, $4, $5)', [key, host, 'v1', 'ip1', lead]);
+    await db.query('select public.collect_lead($1, $2, $3, $4, $5)', [key, host, 'v2', 'ip1', lead]);
+    await db.query('select public.collect_visit($1, $2, $3, $4, $5, $6)', [key, host, 'v1', { gclid: 'g' }, null, '/']);
+  }
 });
 
 after(async () => {
