@@ -31,7 +31,7 @@ label.lbl{font-size:14px;font-weight:600}
 #err{color:#B00020;font-size:14px;display:none}
 #live{background:var(--dark)}
 #stage{position:relative;flex:1;overflow:hidden;background:#000}
-#stage video,#stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#stage video,#stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .mirror{transform:scaleX(-1)}
 #hud{position:absolute;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;display:flex;justify-content:space-between;align-items:flex-start;background:linear-gradient(#000a,#0000)}
 #count{font-size:64px;font-weight:800;line-height:1}
@@ -65,7 +65,7 @@ label.lbl{font-size:14px;font-weight:600}
 <body>
 
 <section id="intro" class="screen on">
-  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v7</small></h1>
+  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v8</small></h1>
   <div>
     <label class="lbl">종목</label>
     <div class="seg" id="exercise" style="grid-template-columns:1fr 1fr">
@@ -100,9 +100,10 @@ label.lbl{font-size:14px;font-weight:600}
   </div>
   <div>
     <label class="lbl">카메라</label>
-    <div class="seg" id="cam" style="grid-template-columns:1fr 1fr">
-      <button data-v="user" class="sel">앞면 (화면 보며)</button><button data-v="environment">뒷면 (더 선명)</button>
+    <div class="seg" id="cam" style="grid-template-columns:1fr 1fr 1fr">
+      <button data-v="user" class="sel">앞면</button><button data-v="environment">뒷면</button><button data-v="ultra">뒷면 초광각</button>
     </div>
+    <p class="note" style="margin:6px 0 0">휴대폰은 세로든 가로든 괜찮아요. 공간이 좁으면 가로로 두거나 초광각을 쓰면 더 가까이 둘 수 있어요(초광각은 아이폰 11 이상).</p>
   </div>
   <p class="note">통증이 느껴지면 바로 멈추세요. 이 데모는 의료·재활 목적이 아니에요. 처음 사용할 때 카메라 권한을 허용해 주세요.</p>
   <div id="err"></div>
@@ -149,15 +150,15 @@ label.lbl{font-size:14px;font-weight:600}
 </section>
 
 <script type="module">
-import * as SQ from './squat-logic.js?v=7';
-import * as PU from './pushup-logic.js?v=7';
+import * as SQ from './squat-logic.js?v=8';
+import * as PU from './pushup-logic.js?v=8';
 
 // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식
 const EXERCISES = {
   squat: {
     name: '스쿼트', lib: SQ, Counter: SQ.SquatCounter,
     intro: '휴대폰을 세워두고 몸 옆면이 보이게 서서, 똑바로 선 채 1초 멈추면 시작해요. 스쿼트를 하면 횟수를 세고, 자세를 소리로 알려드려요. 영상은 이 휴대폰 밖으로 나가지 않아요.',
-    tips: ['2m', '허리 높이'],
+    tips: ['2m', '허리 높이'], down: [11, 12, 27, 28], // 어깨 → 발목이 아래쪽
     modeNote: {
       relaxed: '편안한 깊이까지 앉으면 인정해요. 운동이 처음이거나 유연성이 부족하면 이걸로 시작하세요.',
       strict: '허벅지가 바닥과 평행할 만큼 앉아야 인정하고, 상체 숙임도 더 엄격하게 봐요.',
@@ -180,8 +181,8 @@ const EXERCISES = {
   },
   pushup: {
     name: '푸시업', lib: PU, Counter: PU.PushupCounter,
-    intro: '휴대폰을 바닥에 세워두고 몸 옆면이 보이게 엎드려요. 팔을 편 자세로 1초 멈추면 시작해요. 팔꿈치 각도로 깊이를, 어깨-엉덩이-발목 선으로 엉덩이 처짐을 봐요. 영상은 이 휴대폰 밖으로 나가지 않아요.',
-    tips: ['2.5~3m', '바닥'],
+    intro: '휴대폰을 바닥에 가로로 세워두고 몸 옆면이 보이게 엎드려요. 팔을 편 자세로 1초 멈추면 시작해요. 팔꿈치 각도로 깊이를, 어깨-엉덩이-발목 선으로 엉덩이 처짐을 봐요. 영상은 이 휴대폰 밖으로 나가지 않아요.',
+    tips: ['가로 1.5m', '바닥'], down: [11, 12, 15, 16], // 어깨 → 손목이 아래쪽(바닥)
     modeNote: {
       relaxed: '팔꿈치가 100° 정도까지 굽으면 인정해요. 허리가 크게 처지면 세지 않아요.',
       strict: '팔꿈치가 90°까지 굽어야 인정하고, 몸통이 일직선에서 벗어나면 세지 않아요.',
@@ -268,7 +269,7 @@ async function start() {
   $('startBtn').disabled = true; $('startBtn').textContent = '준비 중...';
   say('', true); // iOS 음성 잠금 해제
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 720 }, height: { ideal: 1280 } }, audio: false });
+    stream = await openCamera();
     const v = $('video'); v.srcObject = stream; await v.play();
     v.classList.toggle('mirror', facing === 'user'); $('overlay').classList.toggle('mirror', facing === 'user');
     $('startBtn').textContent = '자세 인식 모델 불러오는 중...';
@@ -284,10 +285,37 @@ async function start() {
   }
   counter = new (EX().Counter)(mode); CUE_TEXT = EX().lib.CUE_TEXT; NOREP_TEXT = EX().lib.NOREP_TEXT; results = [];
   $('count').innerHTML = `0<small> / ${target}</small>`;
-  setStatus(EX().startStatus);
+  setStatus(ultraMissing ? '초광각 카메라를 찾지 못해 일반 뒷면 카메라로 시작해요' : EX().startStatus, ultraMissing);
   show('live'); running = true; notVisibleSince = performance.now();
   say(EX().startSay);
   loop();
+}
+
+// 카메라 열기. 초광각은 기기 목록에서 이름으로 찾음 (iOS Safari는 권한을 받은 뒤에야 이름을 알려줌)
+async function openCamera() {
+  const base = { width: { ideal: 1280 }, height: { ideal: 720 } };
+  const open = (video) => navigator.mediaDevices.getUserMedia({ video, audio: false });
+  ultraMissing = false;
+  if (facing !== 'ultra') return open({ ...base, facingMode: facing });
+  let st = await open({ ...base, facingMode: 'environment' });
+  const devs = await navigator.mediaDevices.enumerateDevices();
+  const uw = devs.find(d => d.kind === 'videoinput' && /ultra ?wide|울트라|초광각/i.test(d.label));
+  if (!uw) { ultraMissing = true; return st; }
+  st.getTracks().forEach(t => t.stop());
+  return open({ ...base, deviceId: { exact: uw.deviceId } });
+}
+let ultraMissing = false;
+
+// 휴대폰을 가로로 두거나 화면 회전 잠금 상태여도 판정이 되도록, 몸의 '아래쪽'이 화면 아래로 오게 랜드마크를 90° 단위로 돌림
+// 스쿼트는 어깨→발목, 푸시업은 어깨→손목(바닥 짚은 손)이 아래쪽
+function upright(lm, aspect) {
+  const [a, b, c, d] = EX().down;
+  const dx = ((lm[c].x + lm[d].x) - (lm[a].x + lm[b].x)) / 2 * aspect;
+  const dy = ((lm[c].y + lm[d].y) - (lm[a].y + lm[b].y)) / 2;
+  const k = [dy, dx, -dy, -dx].reduce((best, v, i, arr) => v > arr[best] ? i : best, 0);
+  if (k === 0) return { lm, aspect, k };
+  const f = [null, (p) => ({ x: 1 - p.y, y: p.x }), (p) => ({ x: 1 - p.x, y: 1 - p.y }), (p) => ({ x: p.y, y: 1 - p.x })][k];
+  return { lm: lm.map(p => ({ ...p, ...f(p) })), aspect: k % 2 ? 1 / aspect : aspect, k };
 }
 
 function setStatus(text, warn = false) { const s = $('status'); s.textContent = text; s.classList.toggle('warn', warn); }
@@ -297,8 +325,7 @@ function draw(lm, m) {
   const W = c.clientWidth, H = c.clientHeight; if (c.width !== W) c.width = W; if (c.height !== H) c.height = H;
   const ctx = c.getContext('2d'); ctx.clearRect(0, 0, W, H);
   if (!lm) return;
-  // object-fit: cover 보정
-  const vw = v.videoWidth, vh = v.videoHeight, s = Math.max(W / vw, H / vh);
+  const vw = v.videoWidth, vh = v.videoHeight, s = Math.min(W / vw, H / vh); // object-fit: contain
   const ox = (W - vw * s) / 2, oy = (H - vh * s) / 2;
   const P = (i) => [lm[i].x * vw * s + ox, lm[i].y * vh * s + oy];
   const side = EX().joints(m), col = EX().colors(m, counter.t);
@@ -316,11 +343,12 @@ function loop() {
     lastVideoTime = v.currentTime;
     const res = landmarker.detectForVideo(v, now);
     const lm = res.landmarks && res.landmarks[0];
-    const m = lm ? EX().measure(lm, v.videoWidth / v.videoHeight) : null;
+    const up = lm ? upright(lm, v.videoWidth / v.videoHeight) : null;
+    const m = up ? EX().measure(up.lm, up.aspect) : null;
     draw(lm, m);
     if ($('debug').style.display === 'block') {
       $('debug').textContent = m && m.visible
-        ? EX().debug(m, counter)
+        ? EX().debug(m, counter) + `\n화면 회전 보정 ${up.k * 90}°`
         : '전신 인식 안 됨 (' + (m ? m.reason : '') + ')';
     }
     const r = counter.update(m, now);
