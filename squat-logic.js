@@ -72,7 +72,9 @@ export function measure(lm, aspect = 1) {
   const j = Object.fromEntries(JOINTS.map((k) => [k, P(side[k])]));
   const t = THRESHOLDS;
   const minVis = Math.min(...['shoulder', 'hip', 'knee', 'ankle'].map((k) => j[k].v));
-  const inFrame = JOINTS.every((k) => j[k].rx > t.edgeMargin && j[k].rx < 1 - t.edgeMargin && j[k].y > t.edgeMargin && j[k].y < 1 - t.edgeMargin);
+  // v8: 카메라를 가까이 둘 수 있게 머리·발끝은 화면 밖이어도 됨. 어깨·엉덩이·무릎·발목만 화면 안에 있으면 판정
+  const CORE = ['shoulder', 'hip', 'knee', 'ankle'];
+  const inFrame = CORE.every((k) => j[k].rx > t.edgeMargin && j[k].rx < 1 - t.edgeMargin && j[k].y > t.edgeMargin && j[k].y < 1 - t.edgeMargin);
   if (minVis < t.minVisibility || !inFrame) return { visible: false, reason: 'not_in_frame' };
 
   const torsoLen = dist(j.shoulder, j.hip);
@@ -89,7 +91,7 @@ export function measure(lm, aspect = 1) {
     shinLean: fromVertical(j.knee, j.ankle),
     hipY: j.hip.y,
     kneeY: j.knee.y,
-    heelY: j.heel.y,
+    heelY: j.heel.v >= t.minVisibility ? j.heel.y : j.ankle.y, // 뒤꿈치가 화면 밖이면 발목으로 대신 (뒤꿈치는 기록만 함)
     legLen,
   };
 }

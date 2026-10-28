@@ -65,7 +65,7 @@ label.lbl{font-size:14px;font-weight:600}
 <body>
 
 <section id="intro" class="screen on">
-  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v8</small></h1>
+  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v9</small></h1>
   <div>
     <label class="lbl">종목</label>
     <div class="seg" id="exercise" style="grid-template-columns:1fr 1fr">
@@ -150,21 +150,21 @@ label.lbl{font-size:14px;font-weight:600}
 </section>
 
 <script type="module">
-import * as SQ from './squat-logic.js?v=8';
-import * as PU from './pushup-logic.js?v=8';
+import * as SQ from './squat-logic.js?v=9';
+import * as PU from './pushup-logic.js?v=9';
 
 // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식
 const EXERCISES = {
   squat: {
     name: '스쿼트', lib: SQ, Counter: SQ.SquatCounter,
-    intro: '휴대폰을 세워두고 몸 옆면이 보이게 서서, 똑바로 선 채 1초 멈추면 시작해요. 스쿼트를 하면 횟수를 세고, 자세를 소리로 알려드려요. 영상은 이 휴대폰 밖으로 나가지 않아요.',
-    tips: ['2m', '허리 높이'], down: [11, 12, 27, 28], // 어깨 → 발목이 아래쪽
+    intro: '휴대폰을 세로로 세워두고 몸 옆면이 보이게 서서, 똑바로 선 채 1초 멈추면 시작해요. 어깨부터 발목까지만 보이면 돼요(초광각이면 1m까지 가까이). 스쿼트를 하면 횟수를 세고, 자세를 소리로 알려드려요. 영상은 이 휴대폰 밖으로 나가지 않아요.',
+    tips: ['1.5m', '허리 높이'], down: [11, 12, 27, 28], // 어깨 → 발목이 아래쪽
     modeNote: {
       relaxed: '편안한 깊이까지 앉으면 인정해요. 운동이 처음이거나 유연성이 부족하면 이걸로 시작하세요.',
       strict: '허벅지가 바닥과 평행할 만큼 앉아야 인정하고, 상체 숙임도 더 엄격하게 봐요.',
     },
-    startSay: '옆으로 서서 전신이 보이게 해주세요. 똑바로 서서 잠깐 멈추면 시작해요.',
-    startStatus: '옆으로 서서 전신이 화면에 들어오게 해주세요',
+    startSay: '옆으로 서서 어깨부터 발목까지 보이게 해주세요. 똑바로 서서 잠깐 멈추면 시작해요.',
+    startStatus: '옆으로 서서 어깨부터 발목까지 화면에 들어오게 해주세요',
     notSide: ['몸 옆면이 카메라를 향하게 서주세요', '옆으로 서주세요'],
     setupMsg: '똑바로 서서 잠깐 멈춰주세요',
     lostMsg: '다시 똑바로 서서 잠깐 멈춰주세요',
@@ -181,14 +181,14 @@ const EXERCISES = {
   },
   pushup: {
     name: '푸시업', lib: PU, Counter: PU.PushupCounter,
-    intro: '휴대폰을 바닥에 가로로 세워두고 몸 옆면이 보이게 엎드려요. 팔을 편 자세로 1초 멈추면 시작해요. 팔꿈치 각도로 깊이를, 어깨-엉덩이-발목 선으로 엉덩이 처짐을 봐요. 영상은 이 휴대폰 밖으로 나가지 않아요.',
+    intro: '휴대폰을 바닥에 가로로 세워두고 몸 옆면이 보이게 엎드려요(초광각이면 1m까지 가까이). 팔을 편 자세로 1초 멈추면 시작해요. 팔꿈치 각도로 깊이를, 어깨-엉덩이-발목 선으로 엉덩이 처짐을 봐요. 영상은 이 휴대폰 밖으로 나가지 않아요.',
     tips: ['가로 1.5m', '바닥'], down: [11, 12, 15, 16], // 어깨 → 손목이 아래쪽(바닥)
     modeNote: {
       relaxed: '팔꿈치가 100° 정도까지 굽으면 인정해요. 허리가 크게 처지면 세지 않아요.',
       strict: '팔꿈치가 90°까지 굽어야 인정하고, 몸통이 일직선에서 벗어나면 세지 않아요.',
     },
     startSay: '몸 옆면이 보이게 엎드려 주세요. 팔을 펴고 잠깐 멈추면 시작해요.',
-    startStatus: '옆모습이 보이게 엎드려서 전신이 화면에 들어오게 해주세요',
+    startStatus: '옆모습이 보이게 엎드려서 어깨부터 발목까지 화면에 들어오게 해주세요',
     notSide: ['몸 옆면이 카메라를 향하게 엎드려 주세요', '옆모습이 보이게 해주세요'],
     setupMsg: '팔을 펴고 엎드린 자세로 잠깐 멈춰주세요',
     lostMsg: '다시 팔을 펴고 엎드려서 잠깐 멈춰주세요',
@@ -354,9 +354,9 @@ function loop() {
     const r = counter.update(m, now);
     if (r.event === 'not_visible' || r.event === 'not_side') {
       if (now - notVisibleSince > 1500) {
-        const msg = r.event === 'not_side' ? EX().notSide[0] : '머리부터 발끝까지 화면에 들어오게 해주세요';
+        const msg = r.event === 'not_side' ? EX().notSide[0] : '어깨부터 발목까지 화면에 들어오게 해주세요';
         setStatus(msg, true);
-        if (now - lastWarnSpoken > 8000) { say(r.event === 'not_side' ? EX().notSide[1] : '전신이 보이게 해주세요'); lastWarnSpoken = now; }
+        if (now - lastWarnSpoken > 8000) { say(r.event === 'not_side' ? EX().notSide[1] : '어깨부터 발목까지 보이게 해주세요'); lastWarnSpoken = now; }
       }
     } else {
       notVisibleSince = now;
