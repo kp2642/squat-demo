@@ -1,4 +1,4 @@
-// 스쿼트 판정 로직 v3 (브라우저·Node 공용, 외부 의존성 없음)
+// 스쿼트 판정 로직 v4 (브라우저·Node 공용, 외부 의존성 없음)
 // 입력: MediaPipe Pose 랜드마크 33개 [{x, y, z, visibility}], 좌표는 0~1 정규화(y는 아래로 증가)
 //
 // v1에서 바뀐 점
@@ -25,7 +25,10 @@ export const THRESHOLDS = {
   topKnee: 160,         // 이 각도 이상으로 다시 일어서야 반복 완료
   returnDrop: 0.08,     // 엉덩이가 처음 높이 근처(8% 이내)로 돌아와야 반복 완료
   minRepMs: 500,        // 이보다 빠른 반복은 흔들림으로 보고 무시
-  fastDescentMs: 600,   // 이보다 빨리 내려가면 "천천히" 지적
+  fastDescentMs: 800,   // 이보다 빨리 내려가면 "천천히" 지적 (v4: 실측에서 0.72~0.77초 반복이 '너그러움'으로 평가됨)
+  // 주저앉기: 통제 없이 바닥 근처까지 떨어지는 반복 (v4: 실측에서 무릎 34~49°, 하강 76~81% 반복이 모두 '틀린 자세')
+  collapseKnee: 50,
+  collapseDrop: 0.70,
   heelLift: 0.04,       // 뒤꿈치가 처음 높이보다 다리 길이의 4% 이상 올라가면 들린 것으로 봄
   // v2 실제 테스트에서 발가락-뒤꿈치 높이 차로 재던 방식이 모든 반복에서 오탐(7~26%) → v3는 뒤꿈치 자체의
   // 높이 변화로 바꾸고, 실제 데이터로 검증될 때까지 점수에는 넣지 않고 기록만 함
@@ -36,10 +39,10 @@ export const THRESHOLDS = {
 
 // 판정 강도 (사용자가 플랜 설정에서 선택). 횟수 인정 기준은 같고, 자세 평가만 달라짐
 export const MODES = {
-  // 편하게: 무릎 105° 이하면 충분한 깊이, 상체가 정강이보다 25° 넘게 더 숙여지면 지적
-  relaxed: { depthKnee: 105, leanTol: 25 },
-  // 정확하게: 허벅지 평행(무릎 90° 이하 또는 엉덩이가 무릎 높이), 15° 넘게 숙여지면 지적
-  strict: { depthKnee: 90, leanTol: 15 },
+  // 편하게: 무릎 105° 이하면 충분한 깊이, 상체가 정강이보다 20° 넘게 더 숙여지면 지적
+  relaxed: { depthKnee: 105, leanTol: 20 }, // v4: 실측에서 19°는 맞음, 24°는 너그러움 → 25°에서 20°로
+  // 정확하게: 허벅지 평행(무릎 90° 이하 또는 엉덩이가 무릎 높이), 12° 넘게 숙여지면 지적
+  strict: { depthKnee: 90, leanTol: 12 },
 };
 
 const deg = (r) => (r * 180) / Math.PI;
@@ -87,8 +90,9 @@ export function measure(lm, aspect = 1) {
   };
 }
 
-const CUES = ['depth', 'heel', 'chest', 'tempo'];
+const CUES = ['collapse', 'depth', 'heel', 'chest', 'tempo'];
 export const CUE_TEXT = {
+  collapse: '주저앉지 말고 평행까지만 내려가세요',
   depth: '조금 더 앉아주세요',
   chest: '가슴을 세워주세요',
   heel: '뒤꿈치를 바닥에 붙여주세요',
@@ -193,6 +197,7 @@ export class SquatCounter {
     const t = this.t;
     const faults = [];
     const depthOk = c.minKnee <= t.depthKnee || c.hipBelowKnee;
+    if (c.minKnee < t.collapseKnee || c.maxDrop > t.collapseDrop) faults.push('collapse');
     if (!depthOk) faults.push('depth');
     if (t.heelScored && c.maxHeel > t.heelLift) faults.push('heel');
     if (c.maxLeanGap > t.leanTol) faults.push('chest');
@@ -203,6 +208,7 @@ export class SquatCounter {
     if (faults.includes('heel')) score -= 15;
     if (faults.includes('chest')) score -= Math.min(30, (c.maxLeanGap - t.leanTol) * 1.5 + 10);
     if (faults.includes('tempo')) score -= 10;
+    if (faults.includes('collapse')) score -= 35;
     score = Math.max(0, Math.round(score));
     // 교정은 한 번에 하나, 우선순위 순서대로
     const cue = CUES.find((k) => faults.includes(k)) || null;

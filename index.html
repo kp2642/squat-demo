@@ -65,7 +65,7 @@ label.lbl{font-size:14px;font-weight:600}
 <body>
 
 <section id="intro" class="screen on">
-  <h1>스쿼트 코치 데모 <small style="font-size:14px;color:#5F5F5F">v3</small></h1>
+  <h1>스쿼트 코치 데모 <small style="font-size:14px;color:#5F5F5F">v4</small></h1>
   <p>휴대폰을 세워두고 몸 옆면이 보이게 서서, 똑바로 선 채 1초 멈추면 시작해요. 스쿼트를 하면 횟수를 세고, 자세를 소리로 알려드려요. 영상은 이 휴대폰 밖으로 나가지 않아요.</p>
   <div class="tips">
     <div class="tip"><b>2m</b><span>떨어진 거리</span></div>
@@ -136,7 +136,7 @@ label.lbl{font-size:14px;font-weight:600}
 </section>
 
 <script type="module">
-import { measure, SquatCounter, CUE_TEXT } from './squat-logic.js?v=3';
+import { measure, SquatCounter, CUE_TEXT } from './squat-logic.js?v=4';
 
 const MP_BASE = window.MP_BASE || 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
 const MODEL_URL = window.MP_MODEL || 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
@@ -321,7 +321,7 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.score}점 ${r.faults.join('+') || 'ok'} / 무릎 ${r.minKnee}° / 하강 ${r.drop}% / 상체-정강이 ${r.leanGap}° / 뒤꿈치 ${r.heel} / 하강시간 ${r.descentMs}ms / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `스쿼트 데모 v3 결과 [${mode}] (${new Date().toLocaleString('ko-KR')})\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `스쿼트 데모 v4 결과 [${mode}] (${new Date().toLocaleString('ko-KR')})\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
