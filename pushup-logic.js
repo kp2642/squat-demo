@@ -19,6 +19,9 @@ export const THRESHOLDS = {
   edgeMargin: 0.02,
   sideMaxSpread: 0.5,   // 양 어깨 거리 / 몸통 길이가 이보다 크면 정면(머리 쪽)에서 본 것
   plankTilt: 40,        // 어깨-발(무릎) 선이 수평에서 이 각도 이내여야 엎드린 자세로 봄
+  inclineTilt: 60,      // v13: 의자·소파를 짚는 인클라인 푸시업은 몸이 더 기울어 있으므로 60°까지
+  weakVisibility: 0.35, // v13: 운동 중에는 이 정도로 흐릿해도 계속 추적 (바닥 근처에서 손목·발목이 잘 가려짐)
+  plankOffMs: 1500,     // v13: 엎드린 자세가 이만큼 계속 풀려야 쉬는 것으로 봄 (순간 오인식으로 끊기던 문제)
   readyMs: 1000,        // 팔을 편 엎드린 자세를 이만큼 유지해야 시작
   readyElbow: 150,
   readyMotion: 0.05,    // 준비 중 어깨 높이 흔들림 허용치 (팔 길이 대비)
@@ -29,18 +32,19 @@ export const THRESHOLDS = {
   returnDrop: 0.08,
   minRepMs: 500,
   fastDescentMs: 600,   // 이보다 빨리 내려가면 "천천히" 지적
-  noRepDepthOver: 20,   // 깊이 기준보다 20° 넘게 덜 내려가면 세지 않음
   noRepSagOver: 5,      // 엉덩이 처짐이 허용치보다 5° 넘으면 세지 않음 (허리 부담, 모드 무관)
                         // v12: 1차 실측에서 처짐 21°(허용 15°)를 센 반복이 '너그러움' → 10°에서 5°로
   collapseElbow: 40,    // v12: 팔꿈치가 이보다 접히면 가슴이 바닥에 닿아 버티지 못한 것으로 봄 (실측 22° 반복이 '너그러움')
-  lostMs: 1200,
+  lostMs: 3000,         // v13: 1.2초 → 3초. 잠깐 안 보여도 준비 단계로 돌아가지 않음
   smoothing: 0.5,
 };
 
 // 판정 강도. 편하게: 팔꿈치 100°, 처짐 15°/솟음 20° 허용. 정확하게: 90°, 10°/15°
 export const MODES = {
-  relaxed: { depthElbow: 100, sagTol: 15, pikeTol: 20, noRepLine: Infinity },
-  strict: { depthElbow: 90, sagTol: 10, pikeTol: 15, noRepLine: 5 },
+  // v13: 사용자 의견 '초보자에게 어렵다' → 편하게 깊이 100°→110°, 솟음 허용 20°→25°
+  // 깊이로 안 세는 기준은 실측(124·126° 안 셈이 맞음)에 맞춰 120°로 유지
+  relaxed: { depthElbow: 110, sagTol: 15, pikeTol: 25, noRepLine: Infinity, noRepElbow: 120 },
+  strict: { depthElbow: 90, sagTol: 10, pikeTol: 15, noRepLine: 5, noRepElbow: 110 },
 };
 
 const deg = (r) => (r * 180) / Math.PI;
@@ -55,8 +59,9 @@ function fromHorizontal(a, b) {
 }
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
-// 한 프레임 측정. knees=true면 무릎 대고 하는 푸시업(몸통 선을 무릎까지 봄)
-export function measure(lm, aspect = 1, knees = false) {
+// 한 프레임 측정. style: 'full' 기본 / 'knees' 무릎 대고(몸통 선을 무릎까지 봄) / 'incline' 의자·소파 짚고
+export function measure(lm, aspect = 1, style = 'full') {
+  const knees = style === 'knees' || style === true;
   if (!lm || lm.length < 33) return { visible: false, reason: 'none' };
   const P = (i) => ({ x: lm[i].x * aspect, y: lm[i].y, v: lm[i].visibility ?? 0, rx: lm[i].x });
   const need = knees ? ['shoulder', 'elbow', 'wrist', 'hip', 'knee'] : JOINTS;
@@ -66,7 +71,8 @@ export function measure(lm, aspect = 1, knees = false) {
   const t = THRESHOLDS;
   const minVis = Math.min(...need.map((k) => j[k].v));
   const inFrame = need.every((k) => j[k].rx > t.edgeMargin && j[k].rx < 1 - t.edgeMargin && j[k].y > t.edgeMargin && j[k].y < 1 - t.edgeMargin);
-  if (minVis < t.minVisibility || !inFrame) return { visible: false, reason: 'not_in_frame' };
+  if (minVis < t.weakVisibility || !inFrame) return { visible: false, reason: 'not_in_frame' };
+  const weak = minVis < t.minVisibility; // 운동 중에만 받아들임
 
   const anchor = knees ? j.knee : j.ankle;
   const torsoLen = dist(j.shoulder, j.hip);
@@ -83,7 +89,8 @@ export function measure(lm, aspect = 1, knees = false) {
     side: side === L ? 'left' : 'right',
     sideView: spread < t.sideMaxSpread,
     spread,
-    plank: fromHorizontal(j.shoulder, anchor) < t.plankTilt,
+    weak,
+    plank: fromHorizontal(j.shoulder, anchor) < (style === 'incline' ? t.inclineTilt : t.plankTilt),
     elbow: angle(j.shoulder, j.elbow, j.wrist),
     hipDev,
     shoulderY: j.shoulder.y,
@@ -136,7 +143,7 @@ export class PushupCounter {
 
   update(m, now) {
     const t = this.t;
-    if (!m || !m.visible || !m.sideView) {
+    if (!m || !m.visible || !m.sideView || (m.weak && this.state === 'setup')) {
       this.readySince = null; this.readyY = [];
       if (this.state !== 'setup') {
         if (this.lostSince === null) this.lostSince = now;
@@ -157,16 +164,21 @@ export class PushupCounter {
       if (now - this.readySince >= t.readyMs) {
         this.base = { shoulderY: this.readyY.reduce((a, b) => a + b, 0) / this.readyY.length, armLen: s.armLen };
         this.state = 'up';
-        return { event: 'ready' };
+        return { event: 'ready', resumed: this.attempts > 0 };
       }
       return { event: 'setup', hint: 'hold', progress: (now - this.readySince) / t.readyMs };
     }
 
     if (!s.plank) {
-      // 일어서거나 무릎을 꿇고 쉬는 중: 다시 준비 자세부터
-      this.state = 'setup'; this.cur = null; this.readySince = null; this.readyY = [];
-      return { event: 'setup', hint: 'plank' };
+      // 일어서거나 무릎을 꿇고 쉬는 중: 1.5초 넘게 계속되면 다시 준비 자세부터
+      if (this.plankOffSince == null) this.plankOffSince = now;
+      if (now - this.plankOffSince > t.plankOffMs) {
+        this.state = 'setup'; this.cur = null; this.readySince = null; this.readyY = []; this.plankOffSince = null;
+        return { event: 'setup', hint: 'plank' };
+      }
+      return { event: 'tracking' };
     }
+    this.plankOffSince = null;
 
     const drop = (s.shoulderY - this.base.shoulderY) / this.base.armLen;
     if (this.state === 'up') {
@@ -228,7 +240,7 @@ export class PushupCounter {
     let noRep = null;
     if (faults.includes('collapse')) noRep = 'collapse';
     else if (sagOver > t.noRepSagOver) noRep = 'sag';
-    else if (c.minElbow > t.depthElbow + t.noRepDepthOver) noRep = 'depth';
+    else if (c.minElbow > t.noRepElbow) noRep = 'depth';
     else if (sagOver >= t.noRepLine) noRep = 'sag';
     else if (pikeOver >= t.noRepLine) noRep = 'pike';
     this.attempts += 1;

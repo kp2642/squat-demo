@@ -34,7 +34,7 @@ export const THRESHOLDS = {
   // v2 실제 테스트에서 발가락-뒤꿈치 높이 차로 재던 방식이 모든 반복에서 오탐(7~26%) → v3는 뒤꿈치 자체의
   // 높이 변화로 바꾸고, 실제 데이터로 검증될 때까지 점수에는 넣지 않고 기록만 함
   heelScored: false,
-  lostMs: 1200,         // 이만큼 안 보이면 준비 단계로 돌아감
+  lostMs: 2500,         // 이만큼 안 보이면 준비 단계로 돌아감 (v13: 1.2초 → 2.5초)
   smoothing: 0.5,       // 지수 이동 평균 계수 (클수록 반응 빠름)
 };
 
@@ -162,7 +162,7 @@ export class SquatCounter {
       if (now - this.readySince >= t.readyMs) {
         this.base = { hipY: this.readyHip.reduce((a, b) => a + b, 0) / this.readyHip.length, legLen: s.legLen, heelY: s.heelY };
         this.state = 'up';
-        return { event: 'ready' };
+        return { event: 'ready', resumed: this.attempts > 0 };
       }
       return { event: 'setup', hint: 'hold', progress: (now - this.readySince) / t.readyMs };
     }
