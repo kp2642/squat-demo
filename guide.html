@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF">
+<title>운동 시범·가이드</title>
+<style>
+:root{--blue:#2457D6;--ink:#1A1A1A;--muted:#5F5F5F;--line:#E6E6E6;--soft:#F5F6F8;--warn:#B35900}
+*{box-sizing:border-box}
+html,body{margin:0;background:#fff;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;-webkit-text-size-adjust:100%}
+button{font-family:inherit;cursor:pointer}
+header{display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top) + 12px) 16px 8px}
+header a{color:var(--blue);text-decoration:none;font-size:15px;font-weight:600;padding:6px 0}
+header h1{margin:0 0 0 auto;font-size:15px;color:var(--muted);font-weight:600}
+.wrap{max-width:720px;margin:0 auto;padding:0 16px calc(env(safe-area-inset-bottom) + 32px)}
+.seg{display:grid;gap:6px;grid-auto-flow:column;grid-auto-columns:1fr}
+.seg button{height:42px;border:none;border-radius:10px;background:#F2F2F2;color:var(--ink);font-size:15px}
+.seg button.sel{background:var(--blue);color:#fff;font-weight:700}
+.seg.small button{height:34px;font-size:13px}
+#stageBox{position:relative;margin-top:12px;border-radius:16px;overflow:hidden;background:linear-gradient(#EEF1F6,#DCE1EA);aspect-ratio:4/3;touch-action:none}
+#stage{position:absolute;inset:0;width:100%;height:100%;display:block}
+#caption{margin-top:8px;background:#F0F3F9;color:var(--ink);border-radius:12px;padding:10px 12px;font-size:15px;font-weight:600;line-height:1.4;text-align:center;min-height:44px}
+#hint{position:absolute;top:10px;right:12px;font-size:12px;color:#556;background:rgba(255,255,255,.75);border-radius:999px;padding:4px 10px}
+.ctl{display:flex;gap:6px;margin-top:10px}
+.ctl .seg{flex:1}
+.ctl > button{height:34px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:13px;padding:0 12px;color:var(--ink)}
+h2{font-size:18px;margin:28px 0 10px}
+h3{font-size:15px;margin:18px 0 8px}
+ol,ul{margin:0;padding-left:20px;line-height:1.65;font-size:15px}
+li{margin:2px 0}
+p{font-size:15px;line-height:1.6;margin:8px 0}
+.note{font-size:13px;color:var(--muted);line-height:1.55}
+.box{background:var(--soft);border-radius:12px;padding:12px 14px;margin-top:10px}
+.box.warn{background:#FFF4E8}
+.box.warn b{color:var(--warn)}
+table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
+th,td{border-bottom:1px solid var(--line);padding:9px 6px;text-align:left;vertical-align:top;line-height:1.45}
+th{font-size:13px;color:var(--muted);font-weight:600}
+td:first-child{font-weight:600;width:34%}
+.tabs{margin-top:22px}
+#styleRow{margin-top:8px}
+</style>
+</head>
+<body>
+<header>
+  <a id="back" href="./">← 데모로</a>
+  <h1>시범·가이드</h1>
+</header>
+<div class="wrap">
+  <div class="seg" id="ex">
+    <button data-v="squat">스쿼트</button><button data-v="goodmorning">굿모닝</button><button data-v="pushup">푸시업</button>
+  </div>
+  <div class="seg small" id="styleRow"><button data-v="knees">무릎 대고</button><button data-v="full">기본</button></div>
+
+  <div id="stageBox">
+    <canvas id="stage"></canvas>
+    <div id="hint">끌어서 돌려보기</div>
+  </div>
+  <div id="caption"></div>
+  <div class="ctl">
+    <div class="seg small" id="view"><button data-v="side">옆</button><button data-v="angle">비스듬히</button><button data-v="front">앞</button></div>
+    <button id="speed">느리게</button>
+    <button id="play">멈춤</button>
+  </div>
+
+  <div class="seg tabs" id="tab"><button data-v="how" class="sel">하는 법</button><button data-v="judge">판정 가이드</button></div>
+  <div id="how"></div>
+  <div id="judge" style="display:none"></div>
+</div>
+
+<script type="module">
+const THREE = await import(window.THREE_URL || 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js');
+const $ = (id) => document.getElementById(id);
+const q = new URLSearchParams(location.search);
+let ex = ['squat', 'goodmorning', 'pushup'].includes(q.get('ex')) ? q.get('ex') : 'squat';
+let pstyle = q.get('style') === 'full' ? 'full' : 'knees';
+let view = 'side', speed = 1, playing = true;
+
+// ── 몸 치수 (m) ──
+const LEN = { shin: 0.44, thigh: 0.44, torso: 0.52, upper: 0.30, fore: 0.27 };
+const D = Math.PI / 180;
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const ease = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+// 두 마디 관절(팔) 위치 계산: 뿌리 S, 끝 W, 팔꿈치가 향할 방향 pole
+function ik(S, W, a, b, pole) {
+  const d = Math.min(a + b - 1e-4, S.distanceTo(W));
+  const dir = W.clone().sub(S).normalize();
+  const cosA = (a * a + d * d - b * b) / (2 * a * d), sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
+  const p = pole.clone().sub(dir.clone().multiplyScalar(pole.dot(dir))).normalize();
+  return S.clone().add(dir.multiplyScalar(a * cosA)).add(p.multiplyScalar(a * sinA));
+}
+function head(J, neckBase, dir) { J.neck = neckBase; J.head = neckBase.clone().add(dir.clone().multiplyScalar(0.19)); }
+
+// ── 종목별 자세 (p: 0 = 시작 자세, 1 = 가장 낮은 자세). 사람은 +x 방향을 봄, z+가 오른쪽 ──
+const POSE = {
+  // 스쿼트: 무릎 70°(허벅지 거의 평행), 상체는 정강이와 비슷한 기울기, 팔은 앞으로 뻗어 균형
+  squat(p) {
+    const J = {}, ths = 30 * p * D, tht = 80 * p * D, lam = 34 * p * D;
+    for (const [s, z] of [['L', -1], ['R', 1]]) {
+      const ankle = V(0, 0.08, 0.16 * z);
+      const knee = V(Math.sin(ths) * LEN.shin, 0.08 + Math.cos(ths) * LEN.shin, (0.16 + 0.03 * p) * z);
+      const hip = V(knee.x - Math.sin(tht) * LEN.thigh, knee.y + Math.cos(tht) * LEN.thigh, 0.1 * z);
+      Object.assign(J, { [s + 'ankle']: ankle, [s + 'knee']: knee, [s + 'hip']: hip, [s + 'heel']: V(-0.06, 0.03, 0.16 * z), [s + 'toe']: V(0.17, 0.02, 0.2 * z) });
+    }
+    const pelvis = J.Lhip.clone().add(J.Rhip).multiplyScalar(0.5), u = V(Math.sin(lam), Math.cos(lam), 0);
+    const sc = pelvis.clone().add(u.clone().multiplyScalar(LEN.torso));
+    const al = (25 + 65 * p) * D, adir = V(Math.sin(al), -Math.cos(al), 0);
+    for (const [s, z] of [['L', -1], ['R', 1]]) {
+      const sh = sc.clone().add(V(0, 0, 0.19 * z)), el = sh.clone().add(adir.clone().multiplyScalar(LEN.upper));
+      Object.assign(J, { [s + 'shoulder']: sh, [s + 'elbow']: el, [s + 'wrist']: el.clone().add(adir.clone().multiplyScalar(LEN.fore)) });
+    }
+    J.pelvis = pelvis; J.chest = sc;
+    head(J, sc.clone().add(u.clone().multiplyScalar(0.05)), V(Math.sin(0.5 * lam), Math.cos(0.5 * lam), 0));
+    return J;
+  },
+  // 굿모닝: 무릎은 살짝(약 158°), 엉덩이를 뒤로, 등은 곧게 상체 78°까지, 손은 가슴에 X자
+  goodmorning(p) {
+    const J = {}, ths = (2 + 3 * p) * D, tht = (3 + 17 * p) * D, lam = 78 * p * D;
+    for (const [s, z] of [['L', -1], ['R', 1]]) {
+      const ankle = V(0, 0.08, 0.12 * z);
+      const knee = V(Math.sin(ths) * LEN.shin, 0.08 + Math.cos(ths) * LEN.shin, 0.12 * z);
+      const hip = V(knee.x - Math.sin(tht) * LEN.thigh, knee.y + Math.cos(tht) * LEN.thigh, 0.1 * z);
+      Object.assign(J, { [s + 'ankle']: ankle, [s + 'knee']: knee, [s + 'hip']: hip, [s + 'heel']: V(-0.06, 0.03, 0.12 * z), [s + 'toe']: V(0.17, 0.02, 0.14 * z) });
+    }
+    const pelvis = J.Lhip.clone().add(J.Rhip).multiplyScalar(0.5);
+    const u = V(Math.sin(lam), Math.cos(lam), 0), f = V(Math.cos(lam), -Math.sin(lam), 0);
+    const sc = pelvis.clone().add(u.clone().multiplyScalar(LEN.torso));
+    const sh = { L: sc.clone().add(V(0, 0, -0.19)), R: sc.clone().add(V(0, 0, 0.19)) };
+    for (const [s, o, z] of [['L', 'R', -1], ['R', 'L', 1]]) {
+      const wrist = sh[o].clone().add(f.clone().multiplyScalar(0.11)).add(u.clone().multiplyScalar(-0.04)).setZ(-0.1 * z);
+      const el = ik(sh[s], wrist, LEN.upper, LEN.fore, f.clone().multiplyScalar(0.6).add(u.clone().multiplyScalar(-1)).add(V(0, 0, 0.5 * z)));
+      Object.assign(J, { [s + 'shoulder']: sh[s], [s + 'elbow']: el, [s + 'wrist']: wrist });
+    }
+    J.pelvis = pelvis; J.chest = sc;
+    head(J, sc.clone().add(u.clone().multiplyScalar(0.05)), u.clone().add(f.clone().multiplyScalar(0.12)).normalize()); // 고개는 등과 일직선
+    return J;
+  },
+  // 푸시업: 머리부터 발끝(무릎)까지 일직선, 팔꿈치는 몸통에서 약 40°만 벌려 뒤로 굽힘, 바닥에서 팔꿈치 약 80°
+  pushup(p) {
+    const J = {}, knees = pstyle === 'knees';
+    const wy = 0.04, wz = 0.26, sz = 0.19;
+    const R = knees ? LEN.thigh + LEN.torso : LEN.shin + LEN.thigh + LEN.torso;
+    const A = knees ? V(0, 0.06, 0) : V(0, 0.11, 0); // 회전 중심: 무릎 또는 발목
+    const armD = (e) => Math.sqrt(LEN.upper ** 2 + LEN.fore ** 2 - 2 * LEN.upper * LEN.fore * Math.cos(e * D));
+    const reach2 = (e) => Math.sqrt(Math.max(0, armD(e) ** 2 - (wz - sz) ** 2));
+    // 팔을 다 편 시작 자세에서 손목이 어깨 바로 아래 오도록 회전 중심의 x를 정함
+    const topY = wy + reach2(179.5);
+    A.x = -Math.sqrt(R * R - (topY - A.y) ** 2);
+    const e = 179.5 - (179.5 - (knees ? 72 : 80)) * p, r2 = reach2(e); // 무릎 대고는 몸이 짧아 더 굽혀야 가슴이 바닥 가까이 감
+    // 어깨: 회전 중심에서 R, 손목에서 r2 떨어진 점(두 원의 교점 중 위쪽)
+    const W = V(0, wy, 0), dx = W.x - A.x, dy = W.y - A.y, d = Math.hypot(dx, dy);
+    const a = (R * R - r2 * r2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, R * R - a * a));
+    const mx = A.x + a * dx / d, my = A.y + a * dy / d;
+    const S2 = V(mx - h * dy / d, my + h * dx / d, 0);
+    const S = S2.y > my ? S2 : V(mx + h * dy / d, my - h * dx / d, 0);
+    const dir = S.clone().sub(A).normalize();
+    for (const [s, z] of [['L', -1], ['R', 1]]) {
+      let ankle, knee;
+      if (knees) { knee = V(A.x, A.y, 0.1 * z); ankle = V(A.x - LEN.shin, 0.06, 0.09 * z); }
+      else { ankle = V(A.x, A.y, 0.09 * z); knee = ankle.clone().add(dir.clone().multiplyScalar(LEN.shin)).setZ(0.1 * z); }
+      const hip = V(A.x, A.y, 0).add(dir.clone().multiplyScalar(knees ? LEN.thigh : LEN.shin + LEN.thigh)).setZ(0.1 * z);
+      const heel = knees ? ankle.clone().add(V(-0.02, 0.06, 0)) : ankle.clone().add(V(-0.05, 0.07, 0));
+      const toe = knees ? ankle.clone().add(V(-0.18, -0.03, 0)) : V(ankle.x + 0.09, 0.0, 0.09 * z);
+      const sh = S.clone().setZ(sz * z), wr = V(0, wy, wz * z);
+      const el = ik(sh, wr, LEN.upper, LEN.fore, V(-Math.cos(40 * D), 0.15, Math.sin(40 * D) * z));
+      Object.assign(J, { [s + 'ankle']: ankle, [s + 'knee']: knee, [s + 'hip']: hip, [s + 'heel']: heel, [s + 'toe']: toe, [s + 'shoulder']: sh, [s + 'elbow']: el, [s + 'wrist']: wr });
+    }
+    J.pelvis = J.Lhip.clone().add(J.Rhip).multiplyScalar(0.5); J.chest = S;
+    head(J, S.clone().add(dir.clone().multiplyScalar(0.05)), dir); // 고개는 몸과 일직선
+    return J;
+  },
+};
+
+// 동작 시간(초): 시작 정지 → 내려가기 → 바닥 정지 → 올라오기
+const TIMING = { squat: [0.6, 2.0, 0.4, 1.4], goodmorning: [0.6, 2.2, 0.4, 1.5], pushup: [0.6, 1.6, 0.3, 1.1] };
+const CAPS = {
+  squat: ['발은 어깨너비, 발끝은 살짝 바깥으로. 가슴을 펴요', '엉덩이를 뒤로 빼며 2초 동안 천천히 앉아요', '허벅지가 바닥과 평행. 무릎은 발끝 방향', '뒤꿈치로 바닥을 밀며 일어나요'],
+  goodmorning: ['손은 가슴에 X자, 무릎은 살짝만 굽혀요', '등을 곧게 편 채 엉덩이를 뒤로 밀며 숙여요', '허벅지 뒤가 당기는 곳까지. 고개는 등과 일직선', '엉덩이를 앞으로 밀며 일어나요'],
+  pushup: ['손목은 어깨 아래, 머리부터 발끝까지 일직선', '팔꿈치는 몸통 쪽으로 붙여 뒤로 굽히며 1~2초', '가슴이 바닥 가까이. 엉덩이는 그대로', '바닥을 밀며 올라와요'],
+};
+const CAPS_KNEES = ['손목은 어깨 아래, 머리부터 무릎까지 일직선', CAPS.pushup[1], CAPS.pushup[2], CAPS.pushup[3]];
+
+// ── 3D 장면 ──
+const canvas = $('stage');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(32, 4 / 3, 0.1, 50);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a93a6, 1.4));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(1.5, 4, 3); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -2.5, right: 2.5, top: 2.5, bottom: -2.5, near: 0.5, far: 10 });
+scene.add(sun);
+const floor = new THREE.Mesh(new THREE.CircleGeometry(3, 48), new THREE.MeshStandardMaterial({ color: 0xF4F6FA, roughness: 1 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const grid = new THREE.GridHelper(6, 24, 0xC9D0DC, 0xDDE2EA); grid.position.y = 0.001; scene.add(grid);
+
+const skin = new THREE.MeshStandardMaterial({ color: 0xE3E6EC, roughness: 0.55, metalness: 0.05 });
+const jointMat = new THREE.MeshStandardMaterial({ color: 0x8E9AB0, roughness: 0.5 });
+const accent = new THREE.MeshStandardMaterial({ color: 0x2457D6, roughness: 0.5 });
+const BONES = [
+  // [시작, 끝, 굵기(시작), 굵기(끝)]
+  ['Lhip', 'Lknee', 0.075, 0.055], ['Lknee', 'Lankle', 0.052, 0.04], ['Lheel', 'Ltoe', 0.04, 0.035],
+  ['Rhip', 'Rknee', 0.075, 0.055], ['Rknee', 'Rankle', 0.052, 0.04], ['Rheel', 'Rtoe', 0.04, 0.035],
+  ['Lshoulder', 'Lelbow', 0.05, 0.042], ['Lelbow', 'Lwrist', 0.042, 0.034],
+  ['Rshoulder', 'Relbow', 0.05, 0.042], ['Relbow', 'Rwrist', 0.042, 0.034],
+  ['pelvis', 'chest', 0.12, 0.135, 'torso'], ['Lhip', 'Rhip', 0.085, 0.085], ['Lshoulder', 'Rshoulder', 0.06, 0.06], ['neck', 'head', 0.045, 0.045],
+];
+const JOINTS = ['Lknee', 'Rknee', 'Lelbow', 'Relbow', 'Lankle', 'Rankle', 'Lshoulder', 'Rshoulder', 'Lhip', 'Rhip'];
+const parts = BONES.map(([a, b, r1, r2, tag]) => {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r2, r1, 1, 20), skin);
+  m.castShadow = true; scene.add(m); return { a, b, m, tag };
+});
+const jointMeshes = JOINTS.map((k) => { const m = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), jointMat); m.castShadow = true; scene.add(m); return { k, m }; });
+const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.105, 24, 18), skin); headMesh.castShadow = true; scene.add(headMesh);
+const hands = ['Lwrist', 'Rwrist'].map((k) => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12), skin); m.castShadow = true; scene.add(m); return { k, m }; });
+// 등 라인 표시: 굿모닝은 등이 곧은지 보이도록 등 위에 파란 선
+const backLine = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1, 8), accent); scene.add(backLine);
+const UP = V(0, 1, 0);
+function place(m, A, B) {
+  const d = B.clone().sub(A), len = d.length();
+  m.position.copy(A).add(B).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(UP, d.normalize());
+  m.scale.set(1, Math.max(1e-3, len), 1);
+}
+const JR = { knee: 0.058, elbow: 0.045, ankle: 0.045, shoulder: 0.065, hip: 0.08 };
+function pose(J) {
+  for (const { a, b, m } of parts) place(m, J[a], J[b]);
+  for (const { k, m } of jointMeshes) { m.position.copy(J[k]); m.scale.setScalar(JR[k.slice(1)]); }
+  headMesh.position.copy(J.head);
+  for (const { k, m } of hands) m.position.copy(J[k]);
+  // 등 라인: 몸통 뒤쪽 표면 (몸통 축에서 '등' 방향으로 굵기만큼)
+  const axis = J.chest.clone().sub(J.pelvis).normalize();
+  const off = V(-axis.y, axis.x, 0).normalize().multiplyScalar(0.14); // 축에 수직인 등 쪽 (+x를 보고 서거나 엎드린 사람 모두)
+  place(backLine, J.pelvis.clone().add(off), J.chest.clone().add(off));
+  backLine.visible = ex !== 'squat';
+}
+
+// 카메라: 끌어서 돌리기 + 보기 버튼
+const FOCUS = { squat: [V(0.05, 0.82, 0), 4.3], goodmorning: [V(0.05, 0.82, 0), 4.3], pushup: [V(-0.6, 0.3, 0), 3.6] };
+const VIEWS = { side: [0, 6], angle: [38, 14], front: [90, 8] };
+let az = 0, el = 6;
+function setView(v) { view = v; [az, el] = VIEWS[v]; if (ex === 'pushup' && v === 'front') { az = 25; el = 62; } }
+function placeCamera() {
+  const [c, r] = FOCUS[ex];
+  const a = az * D, e = el * D;
+  camera.position.set(c.x + r * Math.sin(a) * Math.cos(e), c.y + r * Math.sin(e), c.z + r * Math.cos(a) * Math.cos(e));
+  camera.lookAt(c);
+}
+let drag = null;
+canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, az, el }; canvas.setPointerCapture(e.pointerId); $('hint').style.display = 'none'; });
+canvas.addEventListener('pointermove', (e) => { if (!drag) return; az = drag.az - (e.clientX - drag.x) * 0.4; el = Math.max(-5, Math.min(80, drag.el + (e.clientY - drag.y) * 0.3)); [...$('view').children].forEach(b => b.classList.remove('sel')); });
+canvas.addEventListener('pointerup', () => { drag = null; });
+
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * renderer.getPixelRatio())) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+}
+
+// 진행: t(초) → p(깊이)와 자막 단계
+let t = 0, last = performance.now();
+function phaseAt(time) {
+  const T = TIMING[ex], total = T.reduce((a, b) => a + b, 0);
+  let x = time % total;
+  if (x < T[0]) return { p: 0, k: 0 };
+  x -= T[0]; if (x < T[1]) return { p: ease(x / T[1]), k: 1 };
+  x -= T[1]; if (x < T[2]) return { p: 1, k: 2 };
+  x -= T[2]; return { p: 1 - ease(x / T[3]), k: 3 };
+}
+let lastK = -1;
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (playing) t += dt * speed;
+  const ph = phaseAt(t), p = forcedP ?? ph.p, k = ph.k;
+  pose(POSE[ex](p));
+  if (k !== lastK) { $('caption').textContent = (ex === 'pushup' && pstyle === 'knees' ? CAPS_KNEES : CAPS[ex])[k]; lastK = k; }
+  resize(); placeCamera(); renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+let forcedP = null;
+window.__guide = { setP: (p) => { forcedP = p; }, pose: (p) => POSE[ex](p), setView, render: () => { placeCamera(); renderer.render(scene, camera); } };
+
+// ── 글 가이드 ──
+const T = {
+  squat: {
+    how: `<h2>하는 법</h2><ol>
+<li>발은 어깨너비로 벌리고 발끝은 살짝(15~30°) 바깥으로 둬요.</li>
+<li>숨을 들이마시고 배에 힘을 준 채, 엉덩이를 뒤로 빼면서 앉기 시작해요.</li>
+<li>무릎은 발끝과 같은 방향으로 굽혀요. 안쪽으로 모이지 않게 해요.</li>
+<li>2초 정도 천천히, 허벅지가 바닥과 평행해질 때까지 앉아요. 처음이면 편한 깊이까지만 해도 돼요.</li>
+<li>뒤꿈치로 바닥을 밀면서 일어나고, 일어나며 숨을 내쉬어요.</li></ol>
+<h3>자주 하는 실수</h3><ul>
+<li>뒤꿈치가 들려요 → 체중을 발 가운데~뒤꿈치에 두세요.</li>
+<li>상체가 너무 숙여져요 → 가슴을 펴고 시선은 2~3m 앞 바닥에.</li>
+<li>바닥까지 털썩 주저앉아요 → 평행까지만, 끝까지 힘을 유지하세요.</li>
+<li>무릎이 안쪽으로 모여요 → 무릎을 발끝 방향으로 살짝 밀어내세요.</li></ul>
+<div class="box"><b>카메라</b><br>휴대폰을 허리 높이에 세로로 세우고 1.5m(뒷면 초광각이면 1m) 떨어져 옆모습이 보이게 서요. 어깨부터 발목까지만 화면에 들어오면 돼요.</div>`,
+    judge: `<h2>판정 가이드</h2><p>옆에서 본 무릎 각도(엉덩이-무릎-발목)와 상체 기울기로 판정해요.</p>
+<table><tr><th>항목</th><th>편하게</th><th>정확하게</th></tr>
+<tr><td>깊이 인정</td><td>무릎 105° 이하</td><td>무릎 90° 이하 또는 엉덩이가 무릎 높이</td></tr>
+<tr><td>안 셈 (얕음)</td><td>무릎 120°보다 덜 앉음</td><td>무릎 105°보다 덜 앉음</td></tr>
+<tr><td>상체 숙임 지적</td><td>정강이보다 10° 넘게 더 숙임, 또는 수직에서 50° 넘음</td><td>7° 넘게, 또는 45° 넘음</td></tr>
+<tr><td>상체로 안 셈</td><td>없음</td><td>허용치보다 5° 넘게 숙임</td></tr>
+<tr><td>주저앉기 (안 셈)</td><td colspan="2">무릎이 50°보다 접히거나 다리 길이의 70% 넘게 떨어짐</td></tr>
+<tr><td>속도</td><td colspan="2">0.8초보다 빨리 내려가면 "천천히"</td></tr></table>
+<div class="box warn"><b>카메라로 못 보는 것</b><br>옆에서는 무릎이 안쪽으로 모이는지, 허리가 둥글게 말리는지 정확히 보이지 않아요. 위 "자주 하는 실수"를 스스로 챙겨 주세요.</div>`,
+  },
+  goodmorning: {
+    how: `<h2>하는 법</h2><p class="note">데드리프트의 기본이 되는 "엉덩이 접기(힙힌지)" 동작이에요. 덤벨이 없어도 할 수 있어요.</p><ol>
+<li>발은 골반 너비로 서고, 손은 가슴 앞에 X자로 모아요.</li>
+<li>무릎은 살짝(약 15~20°)만 굽힌 채로 고정해요.</li>
+<li>등을 곧게 펴고 고개는 등과 일직선으로 둔 채, 엉덩이를 뒤로 밀면서 2초 정도 천천히 상체를 숙여요.</li>
+<li>허벅지 뒤가 당기는 곳까지 숙여요. 유연성이 좋으면 바닥과 거의 평행까지.</li>
+<li>엉덩이를 앞으로 밀면서 일어나요. 허리를 젖히지 말고 똑바로 선 자세에서 멈춰요.</li></ol>
+<h3>자주 하는 실수</h3><ul>
+<li>등이 둥글게 말려요 → 가장 중요한 실수예요. 가슴을 펴고, 등이 말리기 직전까지만 숙이세요.</li>
+<li>인사하듯 허리만 숙여요 → 엉덩이가 뒤로 빠져야 해요. 뒤에 있는 벽을 엉덩이로 민다고 생각하세요.</li>
+<li>무릎을 많이 굽혀 스쿼트가 돼요 → 무릎 각도는 처음 그대로.</li>
+<li>무릎을 완전히 펴요 → 살짝 굽힌 채로 유지해요.</li>
+<li>빠르게 숙여요 → 반동 없이 2초 정도.</li></ul>
+<div class="box"><b>카메라</b><br>휴대폰을 허리 높이에 세로로 세우고 1.5m(초광각이면 1m) 떨어져 옆모습이 보이게 서요. 숙일 때 앞쪽에 상체 길이만큼 공간이 필요해요.</div>`,
+    judge: `<h2>판정 가이드</h2><p>상체 기울기(수직에서 몇 도 숙였는지), 무릎 각도, 숙이는 시간, 그리고 몸 윤곽으로 잰 <b>등 휨</b>으로 판정해요.</p>
+<table><tr><th>항목</th><th>편하게</th><th>정확하게</th></tr>
+<tr><td>깊이 인정</td><td>상체 45° 이상</td><td>상체 70° 이상 (거의 평행)</td></tr>
+<tr><td>안 셈 (얕음)</td><td>40°보다 덜 숙임</td><td>55°보다 덜 숙임</td></tr>
+<tr><td>등 말림</td><td>등 휨 3.5% 넘으면 지적, 5% 넘으면 안 셈</td><td>3.5% 넘으면 지적, 4% 넘으면 안 셈</td></tr>
+<tr><td>고개 떨굼</td><td colspan="2">머리-등 각 132°보다 작으면 지적, 125°보다 작으면 안 셈</td></tr>
+<tr><td>허리로만 숙임</td><td colspan="2">엉덩이가 뒤로 거의 안 빠지면 지적, 크게 모자라면 안 셈</td></tr>
+<tr><td>무릎</td><td>130°보다 굽히면 지적, 110°보다 굽히면 안 셈</td><td>140° / 125°, 다 편 채(172° 넘음) 숙여도 안 셈</td></tr>
+<tr><td>속도</td><td colspan="2">1.5초보다 빨리 숙이면 "천천히", 1초보다 빠르면 안 셈</td></tr></table>
+<p class="note">등 휨: 어깨와 엉덩이를 잇는 선에서 등 표면이 얼마나 불룩하게 튀어나왔는지를 몸통 길이 대비 %로 잰 값이에요. 실측에서 바른 자세는 0~2%, 등이 말린 자세는 5~10%였어요.</p>
+<div class="box warn"><b>주의</b><br>윤곽으로 재기 때문에 헐렁한 옷이나 후드는 값을 흔들 수 있어요. 몸에 붙는 옷이 가장 정확해요.</div>`,
+  },
+  pushup: {
+    how: `<h2>하는 법</h2><ol>
+<li>손은 어깨보다 조금 넓게 짚고, 손목이 어깨 바로 아래 오게 해요.</li>
+<li>머리부터 발끝(무릎 대고 할 때는 무릎)까지 일직선. 배와 엉덩이에 힘을 줘요.</li>
+<li>팔꿈치를 옆으로 벌리지 말고, 몸통에서 30~45°만 벌린 채 뒤쪽으로 굽혀요. 위에서 보면 화살표(↑) 모양이에요.</li>
+<li>1~2초 동안 가슴이 바닥 가까이 갈 때까지 내려가요.</li>
+<li>바닥을 밀어 팔을 펴며 올라와요. 내려갈 때 들이마시고 올라올 때 내쉬어요.</li></ol>
+<h3>단계</h3><ul><li>의자 짚고 → 무릎 대고 → 기본 순서. 바른 자세로 12회씩 2세트가 되면 다음 단계로.</li></ul>
+<h3>자주 하는 실수</h3><ul>
+<li>팔꿈치를 양옆으로 활짝 벌려요 → 어깨에 부담이 커요. 옆 카메라로는 보이지 않으니 꼭 스스로 확인하세요. (위 시범에서 "위" 보기로 확인)</li>
+<li>허리가 처져요 → 배에 힘, 엉덩이를 살짝 조여요.</li>
+<li>엉덩이가 솟거나 뒤로 빠져요 → 무릎(또는 발)부터 어깨까지 일직선.</li>
+<li>고개를 떨궈요 → 시선은 손 조금 앞 바닥.</li></ul>
+<div class="box"><b>카메라</b><br>휴대폰을 바닥에 가로로 세우고 1.5m(초광각이면 1m) 떨어진 곳에 옆모습이 보이게 엎드려요.</div>`,
+    judge: `<h2>판정 가이드</h2><p>팔꿈치 각도(어깨-팔꿈치-손목)와 어깨-엉덩이-발목(무릎) 선으로 판정해요.</p>
+<table><tr><th>항목</th><th>편하게</th><th>정확하게</th></tr>
+<tr><td>깊이 인정</td><td>팔꿈치 120° 이하</td><td>팔꿈치 100° 이하</td></tr>
+<tr><td>안 셈 (얕음)</td><td>130°보다 덜 굽힘</td><td>115°보다 덜 굽힘</td></tr>
+<tr><td>허리 처짐</td><td>15° 넘으면 지적, 20° 넘으면 안 셈</td><td>10° 넘으면 지적, 15° 넘으면 안 셈</td></tr>
+<tr><td>엉덩이 솟음</td><td>25° (무릎 대고 40°) 넘으면 지적</td><td>15° (무릎 대고 30°) 넘으면 지적, 5° 더 넘으면 안 셈</td></tr>
+<tr><td>무너짐 (안 셈)</td><td colspan="2">팔꿈치가 40°보다 접힘 (버티지 못하고 바닥에 닿음)</td></tr>
+<tr><td>속도</td><td colspan="2">0.6초보다 빨리 내려가면 "천천히"</td></tr></table>
+<p class="note">옆에서 찍으면 카메라가 팔꿈치 각을 실제보다 5~10° 크게 읽는 경향이 있어, 정확하게 모드도 100°까지 인정해요.</p>
+<div class="box warn"><b>카메라로 못 보는 것</b><br>팔꿈치가 옆으로 벌어지는 것은 옆 카메라로 보이지 않아요.</div>`,
+  },
+};
+function renderText() { $('how').innerHTML = T[ex].how; $('judge').innerHTML = T[ex].judge; }
+
+function seg(id, cur, on) {
+  const el = $(id);
+  [...el.children].forEach(b => b.classList.toggle('sel', b.dataset.v === cur));
+  el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; [...el.children].forEach(c => c.classList.toggle('sel', c === b)); on(b.dataset.v); });
+}
+function apply() {
+  $('styleRow').style.display = ex === 'pushup' ? 'grid' : 'none';
+  renderText(); setView(view); lastK = -1; t = 0;
+  [...$('view').children].forEach(b => b.classList.toggle('sel', b.dataset.v === view));
+  $('view').children[2].textContent = ex === 'pushup' ? '위' : '앞';
+  const u = new URL(location.href); u.searchParams.set('ex', ex); if (ex === 'pushup') u.searchParams.set('style', pstyle); history.replaceState(null, '', u);
+}
+seg('ex', ex, (v) => { ex = v; apply(); });
+seg('styleRow', pstyle, (v) => { pstyle = v; t = 0; lastK = -1; });
+seg('view', view, (v) => setView(v));
+seg('tab', 'how', (v) => { $('how').style.display = v === 'how' ? 'block' : 'none'; $('judge').style.display = v === 'judge' ? 'block' : 'none'; });
+$('speed').onclick = () => { speed = speed === 1 ? 0.5 : 1; $('speed').textContent = speed === 1 ? '느리게' : '보통 속도'; };
+$('play').onclick = () => { playing = !playing; $('play').textContent = playing ? '멈춤' : '재생'; };
+if (q.get('tab') === 'judge') $('tab').children[1].click();
+apply();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
