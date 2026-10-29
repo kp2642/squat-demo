@@ -44,9 +44,10 @@ export const MODES = {
   // v20 1차 실측(정확하게 63%): 등 굽힘·허리로 숙임·무릎 편 채 빠르게 숙인 반복을 셈 → 아래 안 셈 기준 추가
   relaxed: { depthLean: 45, kneeMin: 130, noRepKnee: 110, noRepHipBack: 0.08, noRepLock: false, noRepFastMs: 1200, noRepDepthOver: 5 },
   // 정확하게: 상체 70°(바닥과 거의 평행), 무릎 145°, 125°
-  strict: { depthLean: 70, kneeMin: 145, noRepKnee: 125, noRepHipBack: 0.09, noRepLock: true, noRepFastMs: 1200 },
+  strict: { depthLean: 70, kneeMin: 145, noRepKnee: 125, noRepHipBack: 0.08, noRepLock: true, noRepFastMs: 1200 },
   // v21 2차 실측(편하게): 30~39°만 살짝 숙여도 셈, 등을 말고 고개는 든 채 1~1.2초에 숙인 반복도 셈
   // → 편하게도 40° 미만은 안 셈, 1.2초보다 빠르게 숙이면 두 모드 모두 안 셈(통제 안 된 동작)
+  // v22 3차 실측(편하게 19/19 일치): 바른 반복도 엉덩이 뒤로 8~9%가 나와 정확하게 안 셈 기준 9% → 8%
 };
 
 const deg = (r) => (r * 180) / Math.PI;
