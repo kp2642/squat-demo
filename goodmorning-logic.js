@@ -1,4 +1,4 @@
-// 굿모닝(맨몸 힙힌지) 판정 로직 v6 (데모 v25) (브라우저·Node 공용, 외부 의존성 없음)
+// 굿모닝(맨몸 힙힌지) 판정 로직 v7 (데모 v26) (브라우저·Node 공용, 외부 의존성 없음)
 // 입력: MediaPipe Pose 랜드마크 33개 [{x, y, z, visibility}], 좌표는 0~1 정규화(y는 아래로 증가)
 // 스쿼트·푸시업 로직과 같은 구조와 이벤트를 씀.
 //
@@ -29,6 +29,7 @@ export const THRESHOLDS = {
   overLean: 90,         // 바닥과 평행보다 많이 숙임 (v20: 100 → 90)
   lockKnee: 172,        // v20: 무릎을 다 편 채 숙임 (실측: 바른 반복 156~167°, 막 숙인 반복 175~177°)
   headFault: 132,       // v24: 등 휨으로 등 말림을 직접 보게 돼서 고개 기준은 완화 (5차 실측 바른 반복 137~151°)
+  torsoFallback: 78,    // v26: 등 휨을 못 잴 때(윤곽 없음)만 몸통 길이로 판단, 아주 크게 줄었을 때만
   torsoFault: 92,       // v23: 몸통 길이가 서 있을 때의 92% 미만이면 등이 말린 것 (실측: 바른 반복 95~107%, 등 만 반복 77~90%)
   curveFault: 3.5,      // v24: 등 윤곽 휨(몸통 길이 대비 %). 5차 실측: 바른 반복 1.3~1.9%, 등 말린 반복 5.0~10.4%
   headFaultOld: 145,       // v20: 머리-등 각이 이보다 작으면 등이 굽음·고개 떨굼 (실측: 바른 반복 157° 이상, 등 굽힌 반복 103~133°)
@@ -45,10 +46,12 @@ export const THRESHOLDS = {
 export const MODES = {
   // 편하게: 상체 45°까지 숙이면 인정, 무릎 130°보다 더 굽히면 지적, 110°보다 더 굽히면 스쿼트가 된 것으로 보고 안 셈
   // v20 1차 실측(정확하게 63%): 등 굽힘·허리로 숙임·무릎 편 채 빠르게 숙인 반복을 셈 → 아래 안 셈 기준 추가
-  relaxed: { depthLean: 45, kneeMin: 130, noRepKnee: 110, noRepHipBack: 0.08, noRepLock: false, noRepFastMs: 1200, noRepDepthOver: 5, noRepTorso: 88, noRepCurve: 6 },
+  relaxed: { depthLean: 45, kneeMin: 130, noRepKnee: 110, noRepHipBack: 0.08, noRepLock: false, noRepFastMs: 1000, noRepDepthOver: 5, noRepTorso: 88, noRepCurve: 5 },
   // 정확하게: 상체 70°(바닥과 거의 평행), 무릎 145°, 125°
-  strict: { depthLean: 70, kneeMin: 140, noRepKnee: 125, noRepHipBack: 0.08, noRepLock: true, noRepFastMs: 1200, noRepTorso: 92, noRepCurve: 5 },
+  strict: { depthLean: 70, kneeMin: 140, noRepKnee: 125, noRepHipBack: 0.08, noRepLock: true, noRepFastMs: 1000, noRepTorso: 92, noRepCurve: 4 },
   // v25: 사용자 '바르게 해도 안 셈' → 등 휨을 바닥 구간 중앙값으로 재고, 안 셈 기준 정확하게 3.5 → 5%, 편하게 4.5 → 6%(지적은 3.5% 그대로)
+  // v26: 등 휨이 등 말림을 잡으니, 빠르게 숙임으로 안 세는 기준은 1.2 → 1.0초 (6차 실측 바른 반복 1.08초)
+  //      등 휨 안 셈 기준: 정확하게 4%, 편하게 5% (바른 반복 0~1.9%, 등 말림 5.0~10.4%)
   // v24 5차 실측(정확하게 63%): 몸통 길이로 못 잡은 등 말림을 등 휨(윤곽)이 모두 잡음 → 판정에 넣음. 바른 반복의 무릎 144° 지적이 엄격 → 무릎 지적 145 → 140°
   // v21 2차 실측(편하게): 30~39°만 살짝 숙여도 셈, 등을 말고 고개는 든 채 1~1.2초에 숙인 반복도 셈
   // → 편하게도 40° 미만은 안 셈, 1.2초보다 빠르게 숙이면 두 모드 모두 안 셈(통제 안 된 동작)
@@ -221,7 +224,9 @@ export class GoodMorningCounter {
       b.sort((x, y) => x - y); c.maxCurve = b[Math.floor(b.length / 2)];
     }
     const torsoPct = this.baseTorso ? c.minTorso / this.baseTorso * 100 : null;
-    if ((torsoPct != null && torsoPct < t.torsoFault) || (c.maxCurve != null && c.maxCurve > t.curveFault)) faults.push('back');
+    // v26: 몸통 길이는 세트 중에 서는 위치·무릎 굽힘에 따라 흔들려서(6차 실측: 같은 바른 자세가 80~95%) 등 휨이 있으면 등 휨만 씀
+    const backBad = c.maxCurve != null ? c.maxCurve > t.curveFault : torsoPct != null && torsoPct < t.torsoFallback;
+    if (backBad) faults.push('back');
     if (c.minHead != null && c.minHead < t.headFault) faults.push('head');
     if (c.maxHipBack < t.hipBackMin) faults.push('hips');
     if (c.minKnee < t.kneeMin) faults.push('knee');
@@ -249,7 +254,7 @@ export class GoodMorningCounter {
     }
     // 세지 않는 반복: 무릎을 많이 굽혀 스쿼트가 됨, 깊이가 크게 모자람
     let noRep = null;
-    if ((torsoPct != null && torsoPct < t.noRepTorso) || (c.maxCurve != null && c.maxCurve > t.noRepCurve)) noRep = 'back';
+    if (c.maxCurve != null ? c.maxCurve > t.noRepCurve : torsoPct != null && torsoPct < t.torsoFallback) noRep = 'back';
     else if (c.minHead != null && c.minHead < t.headNoRep) noRep = 'head';
     else if (c.minKnee < t.noRepKnee) noRep = 'knee';
     else if (c.maxLean < t.depthLean - t.noRepDepthOver) noRep = 'depth';
