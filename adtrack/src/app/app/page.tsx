@@ -137,10 +137,10 @@ export default async function PerformancePage({ searchParams }: Props) {
 
       <section className="card">
         <p className="suggestion" data-testid="suggestion" style={{ margin: 0 }}>
-          {p.suggestion ?? `문의 ${MIN_SAMPLE}건 이상인 유료 채널이 두 개 이상 모이면 예산을 옮길 곳을 제안해 드려요.`}
+          {p.suggestion ?? `광고비를 쓴 채널 중 문의 ${MIN_SAMPLE}건 이상인 채널이 두 개 이상 모이면 예산을 어디에 쓸지 제안해 드려요.`}
         </p>
         <p className="muted small" data-testid="suggestion-basis" style={{ margin: '8px 0 0' }}>
-          제안은 광고비를 쓴 유료 채널 중 문의 {MIN_SAMPLE}건 이상인 채널끼리만 비교해요. 문의가 적으면 계약 1건으로 ROAS 가 크게 흔들리기 때문이에요.
+          제안은 광고비를 쓴 채널 중 문의 {MIN_SAMPLE}건 이상인 채널끼리만 비교해요. 문의가 적으면 계약 1건으로 ROAS 가 크게 흔들리기 때문이에요.
           {' '}비교한 채널: {p.suggestionBasis.compared.length ? p.suggestionBasis.compared.join(', ') : '없음'}.
           {p.suggestionBasis.tooFew.length > 0 && (
             <> 문의가 적어 뺀 채널: {p.suggestionBasis.tooFew.map((c) => `${c.name}(${c.leads}건)`).join(', ')}.</>

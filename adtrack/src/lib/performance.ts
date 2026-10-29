@@ -81,32 +81,35 @@ export function josa(word: string, withFinal: string, withoutFinal: string): str
   return `${word}${hasFinal ? withFinal : withoutFinal}`;
 }
 
-// 한 줄 제안: 표본이 충분한 유료 채널 중 ROAS 가장 높은 곳과 가장 낮은 곳
-export function suggest(rows: Row[], kinds: Map<string, 'paid' | 'free'>): string | null {
-  const paid = rows
-    .filter((r) => r.id && kinds.get(r.id) === 'paid' && r.spend > 0 && r.leads >= MIN_SAMPLE && r.roas != null)
-    .sort((a, b) => b.roas! - a.roas!);
-  if (paid.length < 2) return null;
-  const best = paid[0];
-  const worst = paid[paid.length - 1];
-  if (best.roas === worst.roas) return null;
+// 제안 비교 대상: 광고비를 쓴 채널(블로그 체험단비처럼 무료 채널에 쓴 돈 포함) 중 문의 MIN_SAMPLE 건 이상.
+// 문의가 모자라 뺀 채널은 따로 알려 준다.
+export function suggestionBasis(rows: Row[]): Performance['suggestionBasis'] {
+  const spent = rows.filter((r) => r.id && r.spend > 0);
+  return {
+    compared: spent.filter((r) => r.leads >= MIN_SAMPLE).map((r) => r.name),
+    tooFew: spent.filter((r) => r.leads < MIN_SAMPLE).map((r) => ({ name: r.name, leads: r.leads })),
+  };
+}
+
+// 한 줄 제안: 비교 대상 중 ROAS 가장 높은 곳과 가장 낮은 곳.
+// 가장 낮은 곳도 '확대 검토' 기준 이상이면 줄일 곳이 아니라 늘릴 곳을 제안한다 (계약 단가가 큰 업종).
+export function suggest(rows: Row[], roasHigh: number): string | null {
+  const names = new Set(suggestionBasis(rows).compared);
+  const compared = rows.filter((r) => r.id && names.has(r.name) && r.roas != null).sort((a, b) => b.roas! - a.roas!);
+  if (compared.length < 2) return null;
+  const best = compared[0];
+  const worst = compared[compared.length - 1];
   const pct = (n: number) => `${Math.round(n).toLocaleString('ko-KR')}%`;
+  if (worst.roas! >= roasHigh) {
+    return `비교한 채널이 모두 ROAS ${pct(roasHigh)} 이상이에요. 가장 높은 ${best.name}(${pct(best.roas!)})부터 예산을 늘리는 걸 검토해 보세요.`;
+  }
+  if (best.roas === worst.roas) return null;
   return `${best.name} ROAS ${pct(best.roas!)}로 가장 높고, ${josa(worst.name, '은', '는')} ${pct(worst.roas!)}로 가장 낮아요. `
     + `${worst.name} 예산 일부를 ${josa(best.name, '으로', '로')} 옮기는 걸 검토해 보세요.`;
 }
 
-// 제안 비교 대상: 광고비를 쓴 유료 채널 중 문의 MIN_SAMPLE 건 이상. 모자란 채널은 따로 알려 준다.
-export function suggestionBasis(rows: Row[], kinds: Map<string, 'paid' | 'free'>): Performance['suggestionBasis'] {
-  const paid = rows.filter((r) => r.id && kinds.get(r.id) === 'paid' && r.spend > 0);
-  return {
-    compared: paid.filter((r) => r.leads >= MIN_SAMPLE).map((r) => r.name),
-    tooFew: paid.filter((r) => r.leads < MIN_SAMPLE).map((r) => ({ name: r.name, leads: r.leads })),
-  };
-}
-
 export function computePerformance(raw: RawPerformance): Performance {
   const s = raw.settings;
-  const kinds = new Map(raw.channels.map((c) => [c.id, c.kind]));
   const rows: Row[] = raw.channels
     .filter((c) => c.leads > 0 || c.spend > 0)
     .map((c) => ({ id: c.id, name: c.name, ...metrics(c, s) }));
@@ -128,8 +131,8 @@ export function computePerformance(raw: RawPerformance): Performance {
     total,
     channels: rows,
     keywords: raw.has_keyword_spend ? raw.keywords.map((k) => ({ id: null, name: k.keyword, ...metrics(k, s) })) : [],
-    suggestion: suggest(rows, kinds),
-    suggestionBasis: suggestionBasis(rows, kinds),
+    suggestion: suggest(rows, s.roas_high),
+    suggestionBasis: suggestionBasis(rows),
     attribution,
     stale: raw.stale,
   };

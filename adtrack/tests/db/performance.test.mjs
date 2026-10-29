@@ -3,7 +3,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
-import { seedPerformanceExample } from '../fixtures/performance-example.mjs';
+import { EXAMPLES, rawFromExample, seedExample, seedPerformanceExample } from '../fixtures/performance-example.mjs';
 
 const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
 const admin = { id: randomUUID(), email: `perf-admin-${Date.now()}@example.com` };
@@ -112,3 +112,24 @@ test('문의 1만 건 사업장에서도 성과 집계가 빠르다', async () =
   console.log(`# 문의 1만 건 성과 집계: ${Math.round(ms)}ms`);
   assert.ok(ms < 500, `${Math.round(ms)}ms`);
 });
+
+// 세 업종 예시: DB 집계가 예시 데이터와 같은지 (화면 값은 단위·브라우저 테스트가 손 계산과 비교)
+for (const [name, example] of Object.entries(EXAMPLES)) {
+  test(`${name} 예시: DB 집계가 예시 데이터와 같다`, async () => {
+    const owner = { id: randomUUID(), email: `perf-${name}-${Date.now()}@example.com` };
+    await db.query('insert into auth.users (id, email) values ($1, $2)', [owner.id, owner.email]);
+    const [{ ws: id }] = await as(owner, 'select public.create_workspace($1, $2) as ws', [`${name} 예시`, example.industry]);
+    await seedExample(db, id, example);
+    const p = await perf('2026-09-01', '2026-09-30', owner);
+    const want = rawFromExample(example);
+    const pick = (c) => [c.code, c.spend, c.leads, c.contracts, Number(c.revenue)];
+    assert.deepEqual(p.channels.map(pick), want.channels.map(pick));
+    assert.deepEqual(p.unknown && { ...p.unknown, revenue: Number(p.unknown.revenue) }, want.unknown);
+    assert.deepEqual(p.attribution, want.attribution);
+    assert.equal(p.stale, want.stale);
+    assert.equal(p.settings.contract_term, example.term);
+    // 키워드 광고비가 없으면 화면은 키워드 표를 숨긴다 (집계에는 키워드 문의가 있어도)
+    assert.equal(p.has_keyword_spend, want.has_keyword_spend);
+    if (want.has_keyword_spend) assert.deepEqual(p.keywords.map((k) => ({ ...k, revenue: Number(k.revenue) })), want.keywords);
+  });
+}

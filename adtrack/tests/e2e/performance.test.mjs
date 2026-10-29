@@ -1,12 +1,12 @@
 // 5단계 완료 기준: 예시 데이터로 손으로 계산한 값과 화면 숫자가 모두 일치.
-// 손 계산은 tests/unit/performance.test.ts 맨 위 주석, 예시 데이터는 tests/fixtures/performance-example.mjs.
+// 예시(법률·병원·인테리어)와 손 계산은 tests/fixtures/performance-example.mjs.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { chromium } from 'playwright';
 import { TEST_AUTH_SECRET, loggedIn, startApp } from './app.mjs';
-import { seedPerformanceExample } from '../fixtures/performance-example.mjs';
+import { EXAMPLES, seedExample, seedPerformanceExample } from '../fixtures/performance-example.mjs';
 
 const PORT = 3240;
 const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
@@ -43,47 +43,41 @@ after(async () => {
   await db.end();
 });
 
-test('요약 숫자가 손 계산과 같다', async () => {
-  const { context, page } = await loggedIn(browser, app, admin, { viewport: { width: 1280, height: 900 } });
-  await page.goto(`${app.url}${SEPTEMBER}`);
-  assert.equal(await text(page.getByTestId('period')), '2026. 9. 1. ~ 2026. 9. 30. 에 등록된 문의 기준');
-  assert.equal(await text(page.getByTestId('sum-spend')), '광고비 1,800,000원');
-  assert.equal(await text(page.getByTestId('sum-leads')), '문의 27건 전환율 25.9%');
-  assert.equal(await text(page.getByTestId('sum-contracts')), '수임 7건');
-  assert.equal(await text(page.getByTestId('sum-revenue')), '수임 매출 10,400,000원');
-  assert.equal(await text(page.getByTestId('sum-roas')), 'ROAS 578% 광고비 1원당 5.8원');
-  assert.equal(await text(page.getByTestId('sum-cpl')), '문의당 비용 66,667원');
-  assert.equal(await text(page.getByTestId('sum-cpa')), '수임당 비용 257,143원');
-  await context.close();
-});
+for (const [name, example] of Object.entries(EXAMPLES)) {
+  test(`${name} 예시: 화면 숫자가 손 계산과 모두 같다`, async () => {
+    // 업종마다 새 사업장
+    const owner = { id: randomUUID(), email: `perf-e2e-${name}-${Date.now()}@example.com` };
+    await db.query('insert into auth.users (id, email) values ($1, $2)', [owner.id, owner.email]);
+    await db.query('begin');
+    await db.query("select set_config('request.jwt.claim.sub', $1, true)", [owner.id]);
+    await db.query('set local role authenticated');
+    const id = (await db.query("select public.create_workspace($1, $2, array[]::text[], '대표') as id", [`${name} 예시`, example.industry])).rows[0].id;
+    await db.query('commit');
+    await seedExample(db, id, example);
 
-test('채널별 표·키워드 표·제안·판별 비율·미입력 경고가 손 계산과 같다', async () => {
-  const { context, page } = await loggedIn(browser, app, admin, { viewport: { width: 1280, height: 900 } });
-  await page.goto(`${app.url}${SEPTEMBER}`);
-  assert.deepEqual(await tableRows(page, 'channels'), [
-    ['네이버 검색광고', '1,000,000원', '10', '3', '30.0%', '100,000원', '333,333원', '6,000,000원', '600%', '확대 검토'],
-    ['구글 광고', '500,000원', '6', '1', '16.7%', '83,333원', '500,000원', '1,500,000원', '300%', '유지'],
-    ['메타 광고', '300,000원', '4', '1', '25.0%', '75,000원', '300,000원', '400,000원', '133%', '표본 부족'],
-    ['블로그·체험단', '0원', '3', '1', '33.3%', '-', '-', '2,000,000원', '-', '무료 유입'],
-    ['지인 소개', '0원', '2', '0', '0.0%', '-', '-', '0원', '-', '무료 유입'],
-    ['출처 미확인', '0원', '2', '1', '50.0%', '-', '-', '500,000원', '-', '무료 유입'],
-  ]);
-  assert.deepEqual(await tableRows(page, 'keywords'), [
-    ['이혼전문변호사', '600,000원', '6', '2', '33.3%', '100,000원', '300,000원', '5,000,000원', '833%', '확대 검토'],
-    ['형사변호사', '400,000원', '3', '1', '33.3%', '133,333원', '400,000원', '1,000,000원', '250%', '표본 부족'],
-  ]);
-  assert.equal(await text(page.getByTestId('suggestion')),
-    '네이버 검색광고 ROAS 600%로 가장 높고, 구글 광고는 300%로 가장 낮아요. 구글 광고 예산 일부를 네이버 검색광고로 옮기는 걸 검토해 보세요.');
-  assert.equal(await text(page.getByTestId('suggestion-basis')),
-    '제안은 광고비를 쓴 유료 채널 중 문의 5건 이상인 채널끼리만 비교해요. 문의가 적으면 계약 1건으로 ROAS 가 크게 흔들리기 때문이에요. '
-    + '비교한 채널: 네이버 검색광고, 구글 광고. 문의가 적어 뺀 채널: 메타 광고(4건).');
-  const attr = await text(page.getByTestId('attribution'));
-  for (const s of ['자동 (추적 코드) 20건 · 74%', '쿠폰 문구 1건 · 4%', '고객 응답 2건 · 7%', '직원 직접 선택 2건 · 7%', '출처 미확인 2건 · 7%']) {
-    assert.ok(attr.includes(s), `${s} in ${attr}`);
-  }
-  assert.match(await text(page.getByTestId('stale')), /7일 지난 문의가 15건/);
-  await context.close();
-});
+    const { context, page } = await loggedIn(browser, app, owner, { viewport: { width: 1280, height: 900 } });
+    await page.goto(`${app.url}${SEPTEMBER}`);
+    const e = example.expected;
+    assert.equal(await text(page.getByTestId('period')), '2026. 9. 1. ~ 2026. 9. 30. 에 등록된 문의 기준');
+    for (const [key, value] of Object.entries(e.tiles)) assert.equal(await text(page.getByTestId(`sum-${key}`)), value, key);
+    assert.deepEqual(await tableRows(page, 'channels'), e.channels);
+    if (e.keywords.length) assert.deepEqual(await tableRows(page, 'keywords'), e.keywords);
+    else assert.equal(await page.getByTestId('keywords').count(), 0, '키워드 광고비가 없으면 키워드 표 없음');
+    assert.equal(await text(page.getByTestId('suggestion')), e.suggestion);
+    const basis = await text(page.getByTestId('suggestion-basis'));
+    assert.ok(basis.includes(`비교한 채널: ${e.basis.compared.join(', ')}.`), basis);
+    if (e.basis.tooFew.length) assert.ok(basis.includes(`문의가 적어 뺀 채널: ${e.basis.tooFew.map((c) => `${c.name}(${c.leads}건)`).join(', ')}.`), basis);
+    else assert.ok(!basis.includes('뺀 채널'), basis);
+    const attr = await text(page.getByTestId('attribution'));
+    for (const line of e.attribution) assert.ok(attr.includes(line), `${line} in ${attr}`);
+    if (e.stale) assert.match(await text(page.getByTestId('stale')), new RegExp(`${example.term}·실패 결과가 아직 입력되지 않은 7일 지난 문의가 ${e.stale}건`));
+    else assert.equal(await page.getByTestId('stale').count(), 0, '미입력 문의가 없으면 경고 없음');
+    // 표 머리글도 업종 용어
+    const headers = await page.locator('[data-testid=channels] thead th').allTextContents();
+    assert.deepEqual(headers.slice(3, 7), [example.term, '전환율', '문의당 비용', `${example.term}당 비용`]);
+    await context.close();
+  });
+}
 
 test('월 일부 기간은 광고비를 일수로 나눠 보여 준다', async () => {
   const { context, page } = await loggedIn(browser, app, admin);
