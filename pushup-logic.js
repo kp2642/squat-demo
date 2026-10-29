@@ -30,7 +30,9 @@ export const THRESHOLDS = {
   minRepMs: 500,
   fastDescentMs: 600,   // 이보다 빨리 내려가면 "천천히" 지적
   noRepDepthOver: 20,   // 깊이 기준보다 20° 넘게 덜 내려가면 세지 않음
-  noRepSagOver: 10,     // 엉덩이 처짐이 허용치보다 10° 넘으면 세지 않음 (허리 부담, 모드 무관)
+  noRepSagOver: 5,      // 엉덩이 처짐이 허용치보다 5° 넘으면 세지 않음 (허리 부담, 모드 무관)
+                        // v12: 1차 실측에서 처짐 21°(허용 15°)를 센 반복이 '너그러움' → 10°에서 5°로
+  collapseElbow: 40,    // v12: 팔꿈치가 이보다 접히면 가슴이 바닥에 닿아 버티지 못한 것으로 봄 (실측 22° 반복이 '너그러움')
   lostMs: 1200,
   smoothing: 0.5,
 };
@@ -89,8 +91,9 @@ export function measure(lm, aspect = 1, knees = false) {
   };
 }
 
-const CUES = ['sag', 'depth', 'pike', 'tempo'];
+const CUES = ['collapse', 'sag', 'depth', 'pike', 'tempo'];
 export const CUE_TEXT = {
+  collapse: '바닥에 닿기 전에 버텨주세요',
   sag: '엉덩이가 처지지 않게 배에 힘을 주세요',
   depth: '조금 더 내려가세요',
   pike: '엉덩이를 내려 몸을 일직선으로',
@@ -98,6 +101,7 @@ export const CUE_TEXT = {
   shallow: '더 내려가야 한 번으로 세요',
 };
 export const NOREP_TEXT = {
+  collapse: '바닥까지 내려앉아서 이번은 세지 않아요',
   sag: '허리가 처져서 이번은 세지 않아요',
   depth: '더 내려가야 세요',
   pike: '몸이 일직선이 아니라서 이번은 세지 않아요',
@@ -200,12 +204,14 @@ export class PushupCounter {
     const faults = [];
     const depthOk = c.minElbow <= t.depthElbow;
     const sagOver = c.maxSag - t.sagTol, pikeOver = c.maxPike - t.pikeTol;
+    if (c.minElbow < t.collapseElbow) faults.push('collapse');
     if (sagOver > 0) faults.push('sag');
     if (!depthOk) faults.push('depth');
     if (pikeOver > 0) faults.push('pike');
     if (c.bottomAt - c.startAt < t.fastDescentMs) faults.push('tempo');
     let score = 100;
     if (!depthOk) score -= Math.min(40, (c.minElbow - t.depthElbow) * 1.5 + 10);
+    if (faults.includes('collapse')) score -= 35;
     if (sagOver > 0) score -= Math.min(35, sagOver * 1.5 + 15);
     if (pikeOver > 0) score -= Math.min(25, pikeOver * 1.5 + 10);
     if (faults.includes('tempo')) score -= 10;
@@ -220,7 +226,8 @@ export class PushupCounter {
     }
     // 세지 않는 반복: 허리 처짐이 심함(모드 무관), 깊이가 크게 모자람, (정확하게) 몸통 선이 많이 무너짐
     let noRep = null;
-    if (sagOver > t.noRepSagOver) noRep = 'sag';
+    if (faults.includes('collapse')) noRep = 'collapse';
+    else if (sagOver > t.noRepSagOver) noRep = 'sag';
     else if (c.minElbow > t.depthElbow + t.noRepDepthOver) noRep = 'depth';
     else if (sagOver >= t.noRepLine) noRep = 'sag';
     else if (pikeOver >= t.noRepLine) noRep = 'pike';
