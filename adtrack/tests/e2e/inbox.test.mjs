@@ -2,17 +2,16 @@
 // 400px 폭 터치 화면으로 문의함을 실제로 써 본다. 로그인은 테스트 전용 서명 쿠키(src/lib/test-auth.ts)로 대신한다.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHmac, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { chromium } from 'playwright';
-import { startApp, waitFor } from './app.mjs';
+import { TEST_AUTH_SECRET, loggedIn, startApp, waitFor } from './app.mjs';
 
 process.env.LEAD_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString('base64');
 const { encrypt, nameHash, phoneHash } = await import('../../src/lib/crypto.ts');
 const { maskPhone } = await import('../../src/lib/phone.ts');
 
 const PORT = 3220;
-const SECRET = 'e2e-test-auth-secret';
 const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
 const admin = { id: randomUUID(), email: `inbox-e2e-admin-${Date.now()}@example.com` };
 const staff = { id: randomUUID(), email: `inbox-e2e-staff-${Date.now()}@example.com` };
@@ -34,15 +33,8 @@ async function webLead(name, phone, source) {
 }
 const lead = (id) => db.query('select * from public.leads where id = $1', [id]).then((r) => r.rows[0]);
 
-// 휴대폰 화면으로 로그인한 상태
-async function phoneAs(user) {
-  const context = await browser.newContext({ viewport: { width: 400, height: 800 }, isMobile: true, hasTouch: true, locale: 'ko-KR' });
-  const sig = createHmac('sha256', SECRET).update(user.id).digest('base64url');
-  await context.addCookies([{ name: 'adtrack_test_user', value: `${user.id}.${sig}`, url: app.url }]);
-  const page = await context.newPage();
-  page.on('dialog', (d) => d.accept());
-  return { context, page };
-}
+// 휴대폰 화면(400px, 터치)으로 로그인한 상태
+const phoneAs = (user) => loggedIn(browser, app, user);
 
 // 탭 수를 세면서 누른다
 function tapper(page) {
@@ -66,7 +58,7 @@ before(async () => {
   key = (await db.query('select tracking_key from public.workspaces where id = $1', [ws])).rows[0].tracking_key;
   for (const r of (await db.query('select code, id, name from public.channels where workspace_id = $1', [ws])).rows) channels[r.code ?? r.name] = r.id;
 
-  app = await startApp(PORT, { ADTRACK_TEST_AUTH_SECRET: SECRET });
+  app = await startApp(PORT, { ADTRACK_TEST_AUTH_SECRET: TEST_AUTH_SECRET });
   browser = await chromium.launch();
 });
 

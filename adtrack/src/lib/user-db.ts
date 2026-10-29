@@ -12,7 +12,7 @@ export function userDb(supabase: SupabaseClient, userId: string): UserDb {
   if (testAuthEnabled()) {
     return {
       async rpc<T>(fn: string, args: Record<string, unknown> = {}) {
-        const { sql, values } = rpcSql(fn, args);
+        const { sql, values } = await rpcSql(fn, args);
         const client = await (await pgPool()).connect();
         try {
           await client.query('begin');

@@ -40,3 +40,16 @@ export async function startApp(port, env = {}) {
     },
   };
 }
+
+// 테스트 전용 서명 쿠키로 로그인한 브라우저 (src/lib/test-auth.ts)
+export const TEST_AUTH_SECRET = 'e2e-test-auth-secret';
+
+export async function loggedIn(browser, app, user, options = { viewport: { width: 400, height: 800 }, isMobile: true, hasTouch: true }) {
+  const { createHmac } = await import('node:crypto');
+  const context = await browser.newContext({ locale: 'ko-KR', ...options });
+  const sig = createHmac('sha256', TEST_AUTH_SECRET).update(user.id).digest('base64url');
+  await context.addCookies([{ name: 'adtrack_test_user', value: `${user.id}.${sig}`, url: app.url }]);
+  const page = await context.newPage();
+  page.on('dialog', (d) => d.accept());
+  return { context, page };
+}
