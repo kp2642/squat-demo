@@ -44,8 +44,9 @@ export const THRESHOLDS = {
 export const MODES = {
   // v13: 사용자 의견 '초보자에게 어렵다' → 편하게 깊이 100°→110°, 솟음 허용 20°→25°
   // 깊이로 안 세는 기준은 실측(124·126° 안 셈이 맞음)에 맞춰 120°로 유지
-  relaxed: { depthElbow: 110, sagTol: 15, pikeTol: 25, noRepLine: Infinity, noRepElbow: 120 },
-  strict: { depthElbow: 90, sagTol: 10, pikeTol: 15, noRepLine: 5, noRepElbow: 110 },
+  // v17: '전체적으로 엄격하다'는 의견 → 편하게는 팔꿈치 120°까지 인정, 130°보다 덜 굽혀야만 안 셈, 솟음 감점 최대 15점
+  relaxed: { depthElbow: 120, sagTol: 15, pikeTol: 25, noRepLine: Infinity, noRepElbow: 130, pikePenaltyMax: 15 },
+  strict: { depthElbow: 90, sagTol: 10, pikeTol: 15, noRepLine: 5, noRepElbow: 110, pikePenaltyMax: 25 },
 };
 
 const deg = (r) => (r * 180) / Math.PI;
@@ -227,7 +228,7 @@ export class PushupCounter {
     if (!depthOk) score -= Math.min(40, (c.minElbow - t.depthElbow) * 1.5 + 10);
     if (faults.includes('collapse')) score -= 35;
     if (sagOver > 0) score -= Math.min(35, sagOver * 1.5 + 15);
-    if (pikeOver > 0) score -= Math.min(25, pikeOver * 1.5 + 10);
+    if (pikeOver > 0) score -= Math.min(t.pikePenaltyMax, pikeOver * 1.5 + 10);
     if (faults.includes('tempo')) score -= 10;
     score = Math.max(0, Math.round(score));
     const cue = CUES.find((k) => faults.includes(k)) || null;
