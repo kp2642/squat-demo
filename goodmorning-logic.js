@@ -1,4 +1,4 @@
-// 굿모닝(맨몸 힙힌지) 판정 로직 v4 (데모 v23) (브라우저·Node 공용, 외부 의존성 없음)
+// 굿모닝(맨몸 힙힌지) 판정 로직 v5 (데모 v24) (브라우저·Node 공용, 외부 의존성 없음)
 // 입력: MediaPipe Pose 랜드마크 33개 [{x, y, z, visibility}], 좌표는 0~1 정규화(y는 아래로 증가)
 // 스쿼트·푸시업 로직과 같은 구조와 이벤트를 씀.
 //
@@ -28,11 +28,11 @@ export const THRESHOLDS = {
   countLean: 28,        // 이보다 덜 숙이면 얕은 움직임으로 보고 세지 않음
   overLean: 90,         // 바닥과 평행보다 많이 숙임 (v20: 100 → 90)
   lockKnee: 172,        // v20: 무릎을 다 편 채 숙임 (실측: 바른 반복 156~167°, 막 숙인 반복 175~177°)
-  headFault: 140,       // v23: 145 → 140 (4차 실측 바른 반복 144~153°)
+  headFault: 132,       // v24: 등 휨으로 등 말림을 직접 보게 돼서 고개 기준은 완화 (5차 실측 바른 반복 137~151°)
   torsoFault: 92,       // v23: 몸통 길이가 서 있을 때의 92% 미만이면 등이 말린 것 (실측: 바른 반복 95~107%, 등 만 반복 77~90%)
-  curveFault: 4,        // v23: 등 윤곽 휨(몸통 길이 대비 %) — 기록만, 실측 후 판정 편입
+  curveFault: 3.5,      // v24: 등 윤곽 휨(몸통 길이 대비 %). 5차 실측: 바른 반복 1.3~1.9%, 등 말린 반복 5.0~10.4%
   headFaultOld: 145,       // v20: 머리-등 각이 이보다 작으면 등이 굽음·고개 떨굼 (실측: 바른 반복 157° 이상, 등 굽힌 반복 103~133°)
-  headNoRep: 135,       // 이보다 작으면 모드와 상관없이 안 셈 (안전)
+  headNoRep: 125,       // 이보다 작으면 모드와 상관없이 안 셈 (안전)
   hipBackMin: 0.09,     // v20: 엉덩이가 발목보다 다리 길이의 9% 이상 뒤로 빠져야 힙힌지 (실측: 바른 반복 10~13%, 허리로 숙인 반복 1~8%)
   minRepMs: 600,
   fastDescentMs: 1500,  // 이보다 빨리 숙이면 "천천히" (v21: 1.2 → 1.5초. 실측 바른 반복 1.5~2.8초, 대충 숙인 반복 0.4~1.2초)
@@ -45,9 +45,10 @@ export const THRESHOLDS = {
 export const MODES = {
   // 편하게: 상체 45°까지 숙이면 인정, 무릎 130°보다 더 굽히면 지적, 110°보다 더 굽히면 스쿼트가 된 것으로 보고 안 셈
   // v20 1차 실측(정확하게 63%): 등 굽힘·허리로 숙임·무릎 편 채 빠르게 숙인 반복을 셈 → 아래 안 셈 기준 추가
-  relaxed: { depthLean: 45, kneeMin: 130, noRepKnee: 110, noRepHipBack: 0.08, noRepLock: false, noRepFastMs: 1200, noRepDepthOver: 5, noRepTorso: 88 },
+  relaxed: { depthLean: 45, kneeMin: 130, noRepKnee: 110, noRepHipBack: 0.08, noRepLock: false, noRepFastMs: 1200, noRepDepthOver: 5, noRepTorso: 88, noRepCurve: 4.5 },
   // 정확하게: 상체 70°(바닥과 거의 평행), 무릎 145°, 125°
-  strict: { depthLean: 70, kneeMin: 145, noRepKnee: 125, noRepHipBack: 0.08, noRepLock: true, noRepFastMs: 1200, noRepTorso: 92 },
+  strict: { depthLean: 70, kneeMin: 140, noRepKnee: 125, noRepHipBack: 0.08, noRepLock: true, noRepFastMs: 1200, noRepTorso: 92, noRepCurve: 3.5 },
+  // v24 5차 실측(정확하게 63%): 몸통 길이로 못 잡은 등 말림을 등 휨(윤곽)이 모두 잡음 → 판정에 넣음. 바른 반복의 무릎 144° 지적이 엄격 → 무릎 지적 145 → 140°
   // v21 2차 실측(편하게): 30~39°만 살짝 숙여도 셈, 등을 말고 고개는 든 채 1~1.2초에 숙인 반복도 셈
   // → 편하게도 40° 미만은 안 셈, 1.2초보다 빠르게 숙이면 두 모드 모두 안 셈(통제 안 된 동작)
   // v22 3차 실측(편하게 19/19 일치): 바른 반복도 엉덩이 뒤로 8~9%가 나와 정확하게 안 셈 기준 9% → 8%
@@ -213,7 +214,7 @@ export class GoodMorningCounter {
     const depthOk = c.maxLean >= t.depthLean;
     const descent = c.bottomAt - c.startAt;
     const torsoPct = this.baseTorso ? c.minTorso / this.baseTorso * 100 : null;
-    if (torsoPct != null && torsoPct < t.torsoFault) faults.push('back');
+    if ((torsoPct != null && torsoPct < t.torsoFault) || (c.maxCurve != null && c.maxCurve > t.curveFault)) faults.push('back');
     if (c.minHead != null && c.minHead < t.headFault) faults.push('head');
     if (c.maxHipBack < t.hipBackMin) faults.push('hips');
     if (c.minKnee < t.kneeMin) faults.push('knee');
@@ -241,7 +242,7 @@ export class GoodMorningCounter {
     }
     // 세지 않는 반복: 무릎을 많이 굽혀 스쿼트가 됨, 깊이가 크게 모자람
     let noRep = null;
-    if (torsoPct != null && torsoPct < t.noRepTorso) noRep = 'back';
+    if ((torsoPct != null && torsoPct < t.noRepTorso) || (c.maxCurve != null && c.maxCurve > t.noRepCurve)) noRep = 'back';
     else if (c.minHead != null && c.minHead < t.headNoRep) noRep = 'head';
     else if (c.minKnee < t.noRepKnee) noRep = 'knee';
     else if (c.maxLean < t.depthLean - t.noRepDepthOver) noRep = 'depth';
