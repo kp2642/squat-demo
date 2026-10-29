@@ -1,4 +1,4 @@
-// 굿모닝(맨몸 힙힌지) 판정 로직 v2 (데모 v20) (브라우저·Node 공용, 외부 의존성 없음)
+// 굿모닝(맨몸 힙힌지) 판정 로직 v3 (데모 v21) (브라우저·Node 공용, 외부 의존성 없음)
 // 입력: MediaPipe Pose 랜드마크 33개 [{x, y, z, visibility}], 좌표는 0~1 정규화(y는 아래로 증가)
 // 스쿼트·푸시업 로직과 같은 구조와 이벤트를 씀.
 //
@@ -32,7 +32,7 @@ export const THRESHOLDS = {
   headNoRep: 135,       // 이보다 작으면 모드와 상관없이 안 셈 (안전)
   hipBackMin: 0.09,     // v20: 엉덩이가 발목보다 다리 길이의 9% 이상 뒤로 빠져야 힙힌지 (실측: 바른 반복 10~13%, 허리로 숙인 반복 1~8%)
   minRepMs: 600,
-  fastDescentMs: 1200,  // 이보다 빨리 숙이면 "천천히" (v20: 실측 바른 반복 2.4~2.8초, 인사하듯 막 숙인 반복 0.7~1.1초)
+  fastDescentMs: 1500,  // 이보다 빨리 숙이면 "천천히" (v21: 1.2 → 1.5초. 실측 바른 반복 1.5~2.8초, 대충 숙인 반복 0.4~1.2초)
   noRepDepthOver: 15,   // 깊이 기준보다 15° 넘게 덜 숙이면 세지 않음
   lostMs: 2500,
   smoothing: 0.5,
@@ -42,9 +42,11 @@ export const THRESHOLDS = {
 export const MODES = {
   // 편하게: 상체 45°까지 숙이면 인정, 무릎 130°보다 더 굽히면 지적, 110°보다 더 굽히면 스쿼트가 된 것으로 보고 안 셈
   // v20 1차 실측(정확하게 63%): 등 굽힘·허리로 숙임·무릎 편 채 빠르게 숙인 반복을 셈 → 아래 안 셈 기준 추가
-  relaxed: { depthLean: 45, kneeMin: 130, noRepKnee: 110, noRepHipBack: 0.08, noRepLock: false, noRepFastMs: 0 },
+  relaxed: { depthLean: 45, kneeMin: 130, noRepKnee: 110, noRepHipBack: 0.08, noRepLock: false, noRepFastMs: 1200, noRepDepthOver: 5 },
   // 정확하게: 상체 70°(바닥과 거의 평행), 무릎 145°, 125°
-  strict: { depthLean: 70, kneeMin: 145, noRepKnee: 125, noRepHipBack: 0.09, noRepLock: true, noRepFastMs: 1000 },
+  strict: { depthLean: 70, kneeMin: 145, noRepKnee: 125, noRepHipBack: 0.09, noRepLock: true, noRepFastMs: 1200 },
+  // v21 2차 실측(편하게): 30~39°만 살짝 숙여도 셈, 등을 말고 고개는 든 채 1~1.2초에 숙인 반복도 셈
+  // → 편하게도 40° 미만은 안 셈, 1.2초보다 빠르게 숙이면 두 모드 모두 안 셈(통제 안 된 동작)
 };
 
 const deg = (r) => (r * 180) / Math.PI;
@@ -92,6 +94,7 @@ export function measure(lm, aspect = 1) {
     // 머리·등 숙임 대용 지표: 귀-어깨-엉덩이 각 (곧으면 160° 이상, 등을 말거나 고개를 떨구면 작아짐). 기록만
     head: j.ear.v >= 0.5 ? angle(j.ear, j.shoulder, j.hip) : null,
     legLen,
+    torsoRatio: torsoLen / legLen, // v21: 등을 말면 어깨가 엉덩이 쪽으로 붙어 몸통이 짧아 보임 → 기록만
   };
 }
 
@@ -136,7 +139,7 @@ export class GoodMorningCounter {
   _smooth(m) {
     const a = this.t.smoothing;
     if (!this.s) { this.s = { ...m }; return this.s; }
-    for (const k of ['lean', 'hip', 'knee', 'hipBack', 'legLen']) this.s[k] = a * m[k] + (1 - a) * this.s[k];
+    for (const k of ['lean', 'hip', 'knee', 'hipBack', 'legLen', 'torsoRatio']) this.s[k] = a * m[k] + (1 - a) * this.s[k];
     this.s.head = m.head == null ? null : this.s.head == null ? m.head : a * m.head + (1 - a) * this.s.head;
     return this.s;
   }
@@ -158,9 +161,10 @@ export class GoodMorningCounter {
       if (s.lean > t.readyLean || s.knee < t.readyKnee) { this.readySince = null; this.readyLean = []; return { event: 'setup', hint: 'stand' }; }
       if (this.readySince === null) this.readySince = now;
       this.readyLean.push(s.lean);
+      this.readyTorso = (this.readyTorso ?? s.torsoRatio) * 0.8 + s.torsoRatio * 0.2;
       if (Math.max(...this.readyLean) - Math.min(...this.readyLean) > t.readyMotion) { this.readySince = now; this.readyLean = [s.lean]; return { event: 'setup', hint: 'still' }; }
       if (now - this.readySince >= t.readyMs) {
-        this.state = 'up';
+        this.state = 'up'; this.baseTorso = this.readyTorso; this.readyTorso = null;
         return { event: 'ready', resumed: this.attempts > 0 };
       }
       return { event: 'setup', hint: 'hold', progress: (now - this.readySince) / t.readyMs };
@@ -170,7 +174,7 @@ export class GoodMorningCounter {
       if (s.lean > t.leaveLean) { if (this.leaveAt == null) this.leaveAt = now; } else this.leaveAt = null;
       if (s.lean > t.startLean) {
         this.state = 'down';
-        this.cur = { startAt: this.leaveAt ?? now, bottomAt: now, maxLean: s.lean, minHip: s.hip, minKnee: s.knee, maxHipBack: s.hipBack, minHead: s.head };
+        this.cur = { startAt: this.leaveAt ?? now, bottomAt: now, maxLean: s.lean, minHip: s.hip, minKnee: s.knee, maxHipBack: s.hipBack, minHead: s.head, minTorso: s.torsoRatio };
       }
       return { event: 'tracking', lean: s.lean };
     }
@@ -181,6 +185,7 @@ export class GoodMorningCounter {
     c.minHip = Math.min(c.minHip, s.hip);
     c.minKnee = Math.min(c.minKnee, s.knee);
     c.maxHipBack = Math.max(c.maxHipBack, s.hipBack);
+    if (s.lean > t.countLean) c.minTorso = Math.min(c.minTorso, s.torsoRatio);
     if (s.head != null && s.lean > t.countLean) c.minHead = c.minHead == null ? s.head : Math.min(c.minHead, s.head);
     if (s.lean < t.returnLean) {
       this.state = 'up'; this.cur = null; this.leaveAt = null;
@@ -239,6 +244,7 @@ export class GoodMorningCounter {
       lean: Math.round(c.maxLean), minHip: Math.round(c.minHip), minKnee: Math.round(c.minKnee),
       hipBack: Math.round(c.maxHipBack * 100), head: c.minHead == null ? null : Math.round(c.minHead),
       descentMs: Math.round(c.bottomAt - c.startAt),
+      torso: this.baseTorso ? Math.round(c.minTorso / this.baseTorso * 100) : null, // 몸통 길이(서 있을 때 대비 %)
     };
     this.repLog.push(rec);
     return { event: noRep ? 'norep' : 'rep', rep: rec, speakCue };
