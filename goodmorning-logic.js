@@ -1,0 +1,223 @@
+// 굿모닝(맨몸 힙힌지) 판정 로직 v1 (브라우저·Node 공용, 외부 의존성 없음)
+// 입력: MediaPipe Pose 랜드마크 33개 [{x, y, z, visibility}], 좌표는 0~1 정규화(y는 아래로 증가)
+// 스쿼트·푸시업 로직과 같은 구조와 이벤트를 씀.
+//
+// 동작: 손을 가슴에 모으고 무릎은 살짝만 굽힌 채, 엉덩이를 뒤로 밀며 상체를 숙였다가 일어남.
+// 데드리프트·덤벨 RDL과 같은 '엉덩이 접기(힙힌지)' 동작이라 이 판정을 나중에 그대로 씀.
+// 반복은 상체 기울기(수직 기준)로 셈: 서 있으면 0°, 바닥과 평행이면 90°.
+// 측면 카메라로는 허리가 둥글게 말리는지 직접 볼 수 없음 → 귀-어깨-엉덩이 각도(머리·등 숙임)를
+// 대신 기록만 하고, 실측 데이터로 검증된 뒤에 판정에 넣음 (스쿼트 뒤꿈치와 같은 방식).
+
+const L = { ear: 7, shoulder: 11, hip: 23, knee: 25, ankle: 27 };
+const R = { ear: 8, shoulder: 12, hip: 24, knee: 26, ankle: 28 };
+const CORE = ['shoulder', 'hip', 'knee', 'ankle'];
+
+// 공통 기준값 (근거: NSCA 힙힌지 코칭 — 무릎은 15~20° 정도만 굽히고, 등은 곧게, 엉덩이를 뒤로 밀며
+// 햄스트링이 당기는 지점(보통 상체 45~90°)까지 숙임. 실제 사용자 데이터로 계속 조정)
+export const THRESHOLDS = {
+  minVisibility: 0.6,
+  edgeMargin: 0.02,
+  sideMaxSpread: 0.45,  // 양쪽 어깨·엉덩이 가로 간격 / 몸통 길이가 이보다 크면 정면
+  readyMs: 1000,
+  readyLean: 20,        // 준비: 상체가 수직에서 20° 이내
+  readyKnee: 150,       // 준비: 무릎이 거의 펴짐
+  readyMotion: 6,       // 준비 중 상체 기울기 흔들림 허용(°)
+  startLean: 22,        // 이보다 숙이면 반복 시작
+  returnLean: 15,       // 이 안으로 돌아오면 반복 완료
+  leaveLean: 10,        // 숙이기 시작한 시점(하강 속도 계산용)
+  countLean: 28,        // 이보다 덜 숙이면 얕은 움직임으로 보고 세지 않음
+  overLean: 100,        // 바닥과 평행보다 많이 숙임
+  minRepMs: 600,
+  fastDescentMs: 800,   // 이보다 빨리 숙이면 "천천히"
+  noRepDepthOver: 15,   // 깊이 기준보다 15° 넘게 덜 숙이면 세지 않음
+  lostMs: 2500,
+  smoothing: 0.5,
+};
+
+// 판정 강도
+export const MODES = {
+  // 편하게: 상체 45°까지 숙이면 인정, 무릎 130°보다 더 굽히면 지적, 110°보다 더 굽히면 스쿼트가 된 것으로 보고 안 셈
+  relaxed: { depthLean: 45, kneeMin: 130, noRepKnee: 110 },
+  // 정확하게: 상체 70°(바닥과 거의 평행), 무릎 145°, 125°
+  strict: { depthLean: 70, kneeMin: 145, noRepKnee: 125 },
+};
+
+const deg = (r) => (r * 180) / Math.PI;
+function angle(a, b, c) {
+  const v1x = a.x - b.x, v1y = a.y - b.y, v2x = c.x - b.x, v2y = c.y - b.y;
+  const m = Math.hypot(v1x, v1y) * Math.hypot(v2x, v2y);
+  if (m === 0) return 180;
+  return deg(Math.acos(Math.max(-1, Math.min(1, (v1x * v2x + v1y * v2y) / m))));
+}
+// 어깨가 엉덩이에서 수직선과 이루는 각 (0 = 똑바로 섬, 90 = 바닥과 평행, 90 넘으면 머리가 엉덩이보다 아래)
+function leanFromVertical(sh, hip) {
+  return deg(Math.atan2(Math.abs(sh.x - hip.x), hip.y - sh.y));
+}
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+export function measure(lm, aspect = 1) {
+  if (!lm || lm.length < 33) return { visible: false, reason: 'none' };
+  const P = (i) => ({ x: lm[i].x * aspect, y: lm[i].y, v: lm[i].visibility ?? 0, rx: lm[i].x });
+  const vis = (s) => CORE.reduce((t, k) => t + P(s[k]).v, 0) / CORE.length;
+  const side = vis(L) >= vis(R) ? L : R;
+  const j = Object.fromEntries(Object.keys(L).map((k) => [k, P(side[k])]));
+  const t = THRESHOLDS;
+  const minVis = Math.min(...CORE.map((k) => j[k].v));
+  // 카메라를 가까이 둘 수 있게 어깨·엉덩이·무릎·발목만 화면 안에 있으면 됨(머리·발끝은 잘려도 됨)
+  const inFrame = CORE.every((k) => j[k].rx > t.edgeMargin && j[k].rx < 1 - t.edgeMargin && j[k].y > t.edgeMargin && j[k].y < 1 - t.edgeMargin);
+  if (minVis < t.minVisibility || !inFrame) return { visible: false, reason: 'not_in_frame' };
+
+  const torsoLen = dist(j.shoulder, j.hip);
+  const legLen = dist(j.hip, j.knee) + dist(j.knee, j.ankle);
+  if (torsoLen < 0.05 || legLen < 0.08) return { visible: false, reason: 'too_far' };
+  // 숙이면 어깨 가로 간격이 몸통 길이 대비 커 보일 수 있어, 엉덩이 간격을 더 믿음
+  const spread = (Math.abs(P(L.shoulder).x - P(R.shoulder).x) * 0.4 + Math.abs(P(L.hip).x - P(R.hip).x) * 0.6) / torsoLen;
+  const lean = leanFromVertical(j.shoulder, j.hip);
+  const dir = Math.sign(j.shoulder.x - j.hip.x) || 1; // 몸이 향한 쪽(숙이면 어깨가 가는 쪽)
+  return {
+    visible: true,
+    side: side === L ? 'left' : 'right',
+    sideView: spread < t.sideMaxSpread,
+    spread,
+    lean,
+    hip: angle(j.shoulder, j.hip, j.knee),
+    knee: angle(j.hip, j.knee, j.ankle),
+    // 엉덩이가 발목보다 뒤로 빠진 정도(다리 길이 대비). 바른 힙힌지는 엉덩이가 뒤로 감
+    hipBack: ((j.ankle.x - j.hip.x) * dir) / legLen,
+    // 머리·등 숙임 대용 지표: 귀-어깨-엉덩이 각 (곧으면 160° 이상, 등을 말거나 고개를 떨구면 작아짐). 기록만
+    head: j.ear.v >= 0.5 ? angle(j.ear, j.shoulder, j.hip) : null,
+    legLen,
+  };
+}
+
+const CUES = ['knee', 'depth', 'over', 'tempo'];
+export const CUE_TEXT = {
+  knee: '무릎은 살짝만 굽히고 엉덩이를 뒤로 빼세요',
+  depth: '등을 편 채로 조금 더 숙여주세요',
+  over: '바닥과 평행까지만 숙이세요',
+  tempo: '천천히 숙이세요',
+  shallow: '엉덩이를 뒤로 빼면서 더 숙여야 한 번으로 세요',
+};
+export const NOREP_TEXT = {
+  knee: '무릎을 많이 굽혀 스쿼트가 됐어요. 이번은 세지 않아요',
+  depth: '더 숙여야 세요',
+};
+
+export class GoodMorningCounter {
+  constructor(mode = 'relaxed') { this.setMode(mode); this.reset(); }
+  setMode(mode) { this.mode = MODES[mode] ? mode : 'relaxed'; this.t = { ...THRESHOLDS, ...MODES[this.mode] }; }
+  reset() {
+    this.state = 'setup';
+    this.reps = 0;
+    this.attempts = 0;
+    this.repLog = [];
+    this.readySince = null;
+    this.readyLean = [];
+    this.lostSince = null;
+    this.s = null;
+    this.cur = null;
+    this.leaveAt = null;
+    this.lastRepAt = -1e9;
+    this.cueStreak = { cue: null, count: 0 };
+    this.shallowSpoken = 0;
+  }
+  _smooth(m) {
+    const a = this.t.smoothing;
+    if (!this.s) { this.s = { ...m }; return this.s; }
+    for (const k of ['lean', 'hip', 'knee', 'hipBack', 'legLen']) this.s[k] = a * m[k] + (1 - a) * this.s[k];
+    this.s.head = m.head == null ? null : this.s.head == null ? m.head : a * m.head + (1 - a) * this.s.head;
+    return this.s;
+  }
+
+  update(m, now) {
+    const t = this.t;
+    if (!m || !m.visible || !m.sideView) {
+      this.readySince = null; this.readyLean = [];
+      if (this.state !== 'setup') {
+        if (this.lostSince === null) this.lostSince = now;
+        if (now - this.lostSince > t.lostMs) { this.state = 'setup'; this.cur = null; this.s = null; return { event: 'lost' }; }
+      }
+      return { event: m && m.visible ? 'not_side' : 'not_visible', reason: m && m.reason };
+    }
+    this.lostSince = null;
+    const s = this._smooth(m);
+
+    if (this.state === 'setup') {
+      if (s.lean > t.readyLean || s.knee < t.readyKnee) { this.readySince = null; this.readyLean = []; return { event: 'setup', hint: 'stand' }; }
+      if (this.readySince === null) this.readySince = now;
+      this.readyLean.push(s.lean);
+      if (Math.max(...this.readyLean) - Math.min(...this.readyLean) > t.readyMotion) { this.readySince = now; this.readyLean = [s.lean]; return { event: 'setup', hint: 'still' }; }
+      if (now - this.readySince >= t.readyMs) {
+        this.state = 'up';
+        return { event: 'ready', resumed: this.attempts > 0 };
+      }
+      return { event: 'setup', hint: 'hold', progress: (now - this.readySince) / t.readyMs };
+    }
+
+    if (this.state === 'up') {
+      if (s.lean > t.leaveLean) { if (this.leaveAt == null) this.leaveAt = now; } else this.leaveAt = null;
+      if (s.lean > t.startLean) {
+        this.state = 'down';
+        this.cur = { startAt: this.leaveAt ?? now, bottomAt: now, maxLean: s.lean, minHip: s.hip, minKnee: s.knee, maxHipBack: s.hipBack, minHead: s.head };
+      }
+      return { event: 'tracking', lean: s.lean };
+    }
+
+    // state === 'down'
+    const c = this.cur;
+    if (s.lean > c.maxLean) { c.maxLean = s.lean; c.bottomAt = now; }
+    c.minHip = Math.min(c.minHip, s.hip);
+    c.minKnee = Math.min(c.minKnee, s.knee);
+    c.maxHipBack = Math.max(c.maxHipBack, s.hipBack);
+    if (s.head != null && s.lean > t.countLean) c.minHead = c.minHead == null ? s.head : Math.min(c.minHead, s.head);
+    if (s.lean < t.returnLean) {
+      this.state = 'up'; this.cur = null; this.leaveAt = null;
+      if (now - this.lastRepAt < t.minRepMs || now - c.startAt < t.minRepMs) return { event: 'ignored' };
+      if (c.maxLean < t.countLean) {
+        const speak = this.shallowSpoken < 2; if (speak) this.shallowSpoken += 1;
+        return { event: 'shallow', speak };
+      }
+      this.lastRepAt = now;
+      return this._finishRep(c);
+    }
+    return { event: 'tracking', lean: s.lean };
+  }
+
+  _finishRep(c) {
+    const t = this.t;
+    const faults = [];
+    const depthOk = c.maxLean >= t.depthLean;
+    if (c.minKnee < t.kneeMin) faults.push('knee');
+    if (!depthOk) faults.push('depth');
+    if (c.maxLean > t.overLean) faults.push('over');
+    if (c.bottomAt - c.startAt < t.fastDescentMs) faults.push('tempo');
+    let score = 100;
+    if (faults.includes('knee')) score -= Math.min(30, (t.kneeMin - c.minKnee) * 1.5 + 10);
+    if (!depthOk) score -= Math.min(35, (t.depthLean - c.maxLean) * 1.5 + 10);
+    if (faults.includes('over')) score -= 10;
+    if (faults.includes('tempo')) score -= 10;
+    score = Math.max(0, Math.round(score));
+    const cue = CUES.find((k) => faults.includes(k)) || null;
+    let speakCue = cue;
+    if (cue && this.cueStreak.cue === cue) {
+      this.cueStreak.count += 1;
+      if (this.cueStreak.count > 2) speakCue = null;
+    } else {
+      this.cueStreak = { cue, count: cue ? 1 : 0 };
+    }
+    // 세지 않는 반복: 무릎을 많이 굽혀 스쿼트가 됨, 깊이가 크게 모자람
+    let noRep = null;
+    if (c.minKnee < t.noRepKnee) noRep = 'knee';
+    else if (c.maxLean < t.depthLean - t.noRepDepthOver) noRep = 'depth';
+    this.attempts += 1;
+    if (!noRep) this.reps += 1;
+    const rec = {
+      n: this.attempts, count: this.reps, counted: !noRep, noRep, score, faults, cue, depthOk,
+      lean: Math.round(c.maxLean), minHip: Math.round(c.minHip), minKnee: Math.round(c.minKnee),
+      hipBack: Math.round(c.maxHipBack * 100), head: c.minHead == null ? null : Math.round(c.minHead),
+      descentMs: Math.round(c.bottomAt - c.startAt),
+    };
+    this.repLog.push(rec);
+    return { event: noRep ? 'norep' : 'rep', rep: rec, speakCue };
+  }
+}
