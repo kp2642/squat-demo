@@ -74,6 +74,9 @@ test('채널별 표·키워드 표·제안·판별 비율·미입력 경고가 �
   ]);
   assert.equal(await text(page.getByTestId('suggestion')),
     '네이버 검색광고 ROAS 600%로 가장 높고, 구글 광고는 300%로 가장 낮아요. 구글 광고 예산 일부를 네이버 검색광고로 옮기는 걸 검토해 보세요.');
+  assert.equal(await text(page.getByTestId('suggestion-basis')),
+    '제안은 광고비를 쓴 유료 채널 중 문의 5건 이상인 채널끼리만 비교해요. 문의가 적으면 계약 1건으로 ROAS 가 크게 흔들리기 때문이에요. '
+    + '비교한 채널: 네이버 검색광고, 구글 광고. 문의가 적어 뺀 채널: 메타 광고(4건).');
   const attr = await text(page.getByTestId('attribution'));
   for (const s of ['자동 (추적 코드) 20건 · 74%', '쿠폰 문구 1건 · 4%', '고객 응답 2건 · 7%', '직원 직접 선택 2건 · 7%', '출처 미확인 2건 · 7%']) {
     assert.ok(attr.includes(s), `${s} in ${attr}`);

@@ -43,6 +43,8 @@ export type Performance = {
   channels: Row[]; // 문의나 광고비가 있는 채널, 출처 미확인은 맨 뒤
   keywords: Row[]; // 키워드 광고비를 넣은 달이 있을 때만
   suggestion: string | null;
+  // 제안이 무엇을 비교했는지 화면에 함께 보여 주기 위한 근거
+  suggestionBasis: { compared: string[]; tooFew: { name: string; leads: number }[] };
   attribution: { auto: number; coupon: number; asked: number; manual: number; unknown: number; autoRate: number };
   stale: number;
 };
@@ -93,8 +95,18 @@ export function suggest(rows: Row[], kinds: Map<string, 'paid' | 'free'>): strin
     + `${worst.name} 예산 일부를 ${josa(best.name, '으로', '로')} 옮기는 걸 검토해 보세요.`;
 }
 
+// 제안 비교 대상: 광고비를 쓴 유료 채널 중 문의 MIN_SAMPLE 건 이상. 모자란 채널은 따로 알려 준다.
+export function suggestionBasis(rows: Row[], kinds: Map<string, 'paid' | 'free'>): Performance['suggestionBasis'] {
+  const paid = rows.filter((r) => r.id && kinds.get(r.id) === 'paid' && r.spend > 0);
+  return {
+    compared: paid.filter((r) => r.leads >= MIN_SAMPLE).map((r) => r.name),
+    tooFew: paid.filter((r) => r.leads < MIN_SAMPLE).map((r) => ({ name: r.name, leads: r.leads })),
+  };
+}
+
 export function computePerformance(raw: RawPerformance): Performance {
   const s = raw.settings;
+  const kinds = new Map(raw.channels.map((c) => [c.id, c.kind]));
   const rows: Row[] = raw.channels
     .filter((c) => c.leads > 0 || c.spend > 0)
     .map((c) => ({ id: c.id, name: c.name, ...metrics(c, s) }));
@@ -116,7 +128,8 @@ export function computePerformance(raw: RawPerformance): Performance {
     total,
     channels: rows,
     keywords: raw.has_keyword_spend ? raw.keywords.map((k) => ({ id: null, name: k.keyword, ...metrics(k, s) })) : [],
-    suggestion: suggest(rows, new Map(raw.channels.map((c) => [c.id, c.kind]))),
+    suggestion: suggest(rows, kinds),
+    suggestionBasis: suggestionBasis(rows, kinds),
     attribution,
     stale: raw.stale,
   };

@@ -100,9 +100,14 @@ test('판단 딱지 경계값', () => {
   assert.deepEqual([zero.cpl, zero.cpa, zero.conversion, zero.roas], [null, null, 0, 0]);
 });
 
-test('제안은 표본이 충분한 유료 채널이 둘 이상일 때만', () => {
+test('제안은 표본이 충분한 유료 채널이 둘 이상일 때만, 비교 근거를 함께 준다', () => {
+  assert.deepEqual(computePerformance(EXAMPLE).suggestionBasis, {
+    compared: ['네이버 검색광고', '구글 광고'],
+    tooFew: [{ name: '메타 광고', leads: 4 }], // 카카오는 광고비가 없어 비교 대상 아님
+  });
   const only = computePerformance({ ...EXAMPLE, channels: EXAMPLE.channels.filter((c) => c.id !== 'google_ads') });
   assert.equal(only.suggestion, null);
+  assert.deepEqual(only.suggestionBasis, { compared: ['네이버 검색광고'], tooFew: [{ name: '메타 광고', leads: 4 }] });
 });
 
 test('조사', () => {
