@@ -67,7 +67,7 @@ label.lbl{font-size:14px;font-weight:600}
 <body>
 
 <section id="intro" class="screen on">
-  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v19</small></h1>
+  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v20</small></h1>
   <div>
     <label class="lbl">종목</label>
     <div class="seg" id="exercise" style="grid-template-columns:1fr 1fr 1fr">
@@ -152,9 +152,9 @@ label.lbl{font-size:14px;font-weight:600}
 </section>
 
 <script type="module">
-import * as SQ from './squat-logic.js?v=19';
-import * as PU from './pushup-logic.js?v=19';
-import * as GM from './goodmorning-logic.js?v=19';
+import * as SQ from './squat-logic.js?v=20';
+import * as PU from './pushup-logic.js?v=20';
+import * as GM from './goodmorning-logic.js?v=20';
 
 // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식
 const EXERCISES = {
@@ -211,11 +211,11 @@ const EXERCISES = {
   },
   goodmorning: {
     name: '굿모닝', lib: GM, Counter: GM.GoodMorningCounter,
-    intro: '데드리프트의 기본이 되는 "엉덩이 접기" 동작이에요. 발은 골반 너비로 서서 손을 가슴 앞에 X자로 모으고, 무릎은 살짝만 굽혀요. 등을 곧게 편 채 엉덩이를 뒤로 밀면서 상체를 숙이고, 허벅지 뒤가 당기면 엉덩이를 앞으로 밀며 일어나요. 휴대폰을 세로로 세워두고 옆모습이 보이게 서요(초광각이면 1m까지 가까이). 숙일 때 앞쪽으로 상체 길이만큼 공간이 필요해요. 영상은 이 휴대폰 밖으로 나가지 않아요.',
+    intro: '데드리프트의 기본이 되는 "엉덩이 접기" 동작이에요. 발은 골반 너비로 서서 손을 가슴 앞에 X자로 모으고, 무릎은 살짝만 굽혀요. 고개는 등과 일직선으로 두고, 등을 곧게 편 채 엉덩이를 뒤로 밀면서 2초쯤 천천히 상체를 숙이고, 허벅지 뒤가 당기면 엉덩이를 앞으로 밀며 일어나요. 휴대폰을 세로로 세워두고 옆모습이 보이게 서요(초광각이면 1m까지 가까이). 숙일 때 앞쪽으로 상체 길이만큼 공간이 필요해요. 영상은 이 휴대폰 밖으로 나가지 않아요.',
     tips: ['1.5m', '허리 높이'], minSpan: 0.3, axis: 'y', core: () => [11, 23, 25, 27], down: [23, 24, 27, 28], // 엉덩이 → 발목이 아래쪽 (숙여도 변하지 않음)
     modeNote: {
-      relaxed: '상체를 45° 정도 숙이면 인정해요. 무릎을 많이 굽혀 스쿼트처럼 앉으면 세지 않아요.',
-      strict: '상체가 바닥과 거의 평행(70°)할 만큼 숙여야 인정하고, 무릎은 살짝만 굽혀야 해요.',
+      relaxed: '상체를 45° 정도 숙이면 인정해요. 등이 굽거나 엉덩이를 뒤로 빼지 않고 허리로만 숙이면 세지 않아요.',
+      strict: '상체가 바닥과 거의 평행(70°)할 만큼 숙여야 인정해요. 등 굽힘, 허리로만 숙이기, 무릎을 다 편 채 숙이기, 1초보다 빠르게 숙이기는 세지 않아요.',
     },
     startSay: '옆으로 서서 손을 가슴에 모아 주세요. 똑바로 서서 잠깐 멈추면 시작해요. 등은 곧게, 엉덩이를 뒤로 빼면서 숙이세요.',
     startStatus: '옆으로 서서 어깨부터 발목까지 화면에 들어오게 해주세요',
@@ -228,8 +228,8 @@ const EXERCISES = {
     arc: { at: 2, value: (m) => m.hip },
     colors(m, t) {
       const ok = m && m.visible && m.sideView;
-      const torso = ok && m.lean >= t.depthLean ? '#6FCF97' : '#6FA0FF';
-      const leg = ok && m.knee < t.kneeMin ? '#FFA94D' : '#6FA0FF';
+      const torso = ok && m.head != null && m.head < t.headFault ? '#FFA94D' : ok && m.lean >= t.depthLean ? '#6FCF97' : '#6FA0FF';
+      const leg = ok && m.lean > t.startLean && (m.knee < t.kneeMin || m.knee > t.lockKnee) ? '#FFA94D' : '#6FA0FF';
       return [torso, torso, leg, leg];
     },
     detail: (r) => `상체 ${r.lean}° · 무릎 ${r.minKnee}° · 엉덩이 뒤로 ${r.hipBack}%`,
@@ -569,7 +569,7 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EX().line(r)} / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `${EX().name} 데모 v19 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `${EX().name} 데모 v20 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };

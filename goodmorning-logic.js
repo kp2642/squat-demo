@@ -1,4 +1,4 @@
-// 굿모닝(맨몸 힙힌지) 판정 로직 v1 (브라우저·Node 공용, 외부 의존성 없음)
+// 굿모닝(맨몸 힙힌지) 판정 로직 v2 (데모 v20) (브라우저·Node 공용, 외부 의존성 없음)
 // 입력: MediaPipe Pose 랜드마크 33개 [{x, y, z, visibility}], 좌표는 0~1 정규화(y는 아래로 증가)
 // 스쿼트·푸시업 로직과 같은 구조와 이벤트를 씀.
 //
@@ -26,9 +26,13 @@ export const THRESHOLDS = {
   returnLean: 15,       // 이 안으로 돌아오면 반복 완료
   leaveLean: 10,        // 숙이기 시작한 시점(하강 속도 계산용)
   countLean: 28,        // 이보다 덜 숙이면 얕은 움직임으로 보고 세지 않음
-  overLean: 100,        // 바닥과 평행보다 많이 숙임
+  overLean: 90,         // 바닥과 평행보다 많이 숙임 (v20: 100 → 90)
+  lockKnee: 172,        // v20: 무릎을 다 편 채 숙임 (실측: 바른 반복 156~167°, 막 숙인 반복 175~177°)
+  headFault: 145,       // v20: 머리-등 각이 이보다 작으면 등이 굽음·고개 떨굼 (실측: 바른 반복 157° 이상, 등 굽힌 반복 103~133°)
+  headNoRep: 135,       // 이보다 작으면 모드와 상관없이 안 셈 (안전)
+  hipBackMin: 0.09,     // v20: 엉덩이가 발목보다 다리 길이의 9% 이상 뒤로 빠져야 힙힌지 (실측: 바른 반복 10~13%, 허리로 숙인 반복 1~8%)
   minRepMs: 600,
-  fastDescentMs: 800,   // 이보다 빨리 숙이면 "천천히"
+  fastDescentMs: 1200,  // 이보다 빨리 숙이면 "천천히" (v20: 실측 바른 반복 2.4~2.8초, 인사하듯 막 숙인 반복 0.7~1.1초)
   noRepDepthOver: 15,   // 깊이 기준보다 15° 넘게 덜 숙이면 세지 않음
   lostMs: 2500,
   smoothing: 0.5,
@@ -37,9 +41,10 @@ export const THRESHOLDS = {
 // 판정 강도
 export const MODES = {
   // 편하게: 상체 45°까지 숙이면 인정, 무릎 130°보다 더 굽히면 지적, 110°보다 더 굽히면 스쿼트가 된 것으로 보고 안 셈
-  relaxed: { depthLean: 45, kneeMin: 130, noRepKnee: 110 },
+  // v20 1차 실측(정확하게 63%): 등 굽힘·허리로 숙임·무릎 편 채 빠르게 숙인 반복을 셈 → 아래 안 셈 기준 추가
+  relaxed: { depthLean: 45, kneeMin: 130, noRepKnee: 110, noRepHipBack: 0.08, noRepLock: false, noRepFastMs: 0 },
   // 정확하게: 상체 70°(바닥과 거의 평행), 무릎 145°, 125°
-  strict: { depthLean: 70, kneeMin: 145, noRepKnee: 125 },
+  strict: { depthLean: 70, kneeMin: 145, noRepKnee: 125, noRepHipBack: 0.09, noRepLock: true, noRepFastMs: 1000 },
 };
 
 const deg = (r) => (r * 180) / Math.PI;
@@ -90,8 +95,11 @@ export function measure(lm, aspect = 1) {
   };
 }
 
-const CUES = ['knee', 'depth', 'over', 'tempo'];
+const CUES = ['head', 'hips', 'knee', 'lock', 'depth', 'over', 'tempo'];
 export const CUE_TEXT = {
+  head: '고개를 들고 등을 곧게 펴세요',
+  hips: '허리로 숙이지 말고 엉덩이를 뒤로 빼세요',
+  lock: '무릎을 살짝 굽혀주세요',
   knee: '무릎은 살짝만 굽히고 엉덩이를 뒤로 빼세요',
   depth: '등을 편 채로 조금 더 숙여주세요',
   over: '바닥과 평행까지만 숙이세요',
@@ -99,6 +107,10 @@ export const CUE_TEXT = {
   shallow: '엉덩이를 뒤로 빼면서 더 숙여야 한 번으로 세요',
 };
 export const NOREP_TEXT = {
+  head: '등이 굽어서 이번은 세지 않아요',
+  hips: '엉덩이를 뒤로 빼지 않아서 이번은 세지 않아요',
+  lock: '무릎을 편 채 숙여서 이번은 세지 않아요',
+  tempo: '너무 빨리 숙여서 이번은 세지 않아요',
   knee: '무릎을 많이 굽혀 스쿼트가 됐어요. 이번은 세지 않아요',
   depth: '더 숙여야 세요',
 };
@@ -187,13 +199,20 @@ export class GoodMorningCounter {
     const t = this.t;
     const faults = [];
     const depthOk = c.maxLean >= t.depthLean;
+    const descent = c.bottomAt - c.startAt;
+    if (c.minHead != null && c.minHead < t.headFault) faults.push('head');
+    if (c.maxHipBack < t.hipBackMin) faults.push('hips');
     if (c.minKnee < t.kneeMin) faults.push('knee');
+    if (c.minKnee > t.lockKnee) faults.push('lock');
     if (!depthOk) faults.push('depth');
     if (c.maxLean > t.overLean) faults.push('over');
-    if (c.bottomAt - c.startAt < t.fastDescentMs) faults.push('tempo');
+    if (descent < t.fastDescentMs) faults.push('tempo');
     let score = 100;
     if (faults.includes('knee')) score -= Math.min(30, (t.kneeMin - c.minKnee) * 1.5 + 10);
     if (!depthOk) score -= Math.min(35, (t.depthLean - c.maxLean) * 1.5 + 10);
+    if (faults.includes('head')) score -= 20;
+    if (faults.includes('hips')) score -= 15;
+    if (faults.includes('lock')) score -= 10;
     if (faults.includes('over')) score -= 10;
     if (faults.includes('tempo')) score -= 10;
     score = Math.max(0, Math.round(score));
@@ -207,8 +226,12 @@ export class GoodMorningCounter {
     }
     // 세지 않는 반복: 무릎을 많이 굽혀 스쿼트가 됨, 깊이가 크게 모자람
     let noRep = null;
-    if (c.minKnee < t.noRepKnee) noRep = 'knee';
+    if (c.minHead != null && c.minHead < t.headNoRep) noRep = 'head';
+    else if (c.minKnee < t.noRepKnee) noRep = 'knee';
     else if (c.maxLean < t.depthLean - t.noRepDepthOver) noRep = 'depth';
+    else if (c.maxHipBack < t.noRepHipBack) noRep = 'hips';
+    else if (t.noRepLock && c.minKnee > t.lockKnee) noRep = 'lock';
+    else if (descent < t.noRepFastMs) noRep = 'tempo';
     this.attempts += 1;
     if (!noRep) this.reps += 1;
     const rec = {
