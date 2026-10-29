@@ -1,4 +1,4 @@
-// 굿모닝(맨몸 힙힌지) 판정 로직 v3 (데모 v21) (브라우저·Node 공용, 외부 의존성 없음)
+// 굿모닝(맨몸 힙힌지) 판정 로직 v4 (데모 v23) (브라우저·Node 공용, 외부 의존성 없음)
 // 입력: MediaPipe Pose 랜드마크 33개 [{x, y, z, visibility}], 좌표는 0~1 정규화(y는 아래로 증가)
 // 스쿼트·푸시업 로직과 같은 구조와 이벤트를 씀.
 //
@@ -28,7 +28,10 @@ export const THRESHOLDS = {
   countLean: 28,        // 이보다 덜 숙이면 얕은 움직임으로 보고 세지 않음
   overLean: 90,         // 바닥과 평행보다 많이 숙임 (v20: 100 → 90)
   lockKnee: 172,        // v20: 무릎을 다 편 채 숙임 (실측: 바른 반복 156~167°, 막 숙인 반복 175~177°)
-  headFault: 145,       // v20: 머리-등 각이 이보다 작으면 등이 굽음·고개 떨굼 (실측: 바른 반복 157° 이상, 등 굽힌 반복 103~133°)
+  headFault: 140,       // v23: 145 → 140 (4차 실측 바른 반복 144~153°)
+  torsoFault: 92,       // v23: 몸통 길이가 서 있을 때의 92% 미만이면 등이 말린 것 (실측: 바른 반복 95~107%, 등 만 반복 77~90%)
+  curveFault: 4,        // v23: 등 윤곽 휨(몸통 길이 대비 %) — 기록만, 실측 후 판정 편입
+  headFaultOld: 145,       // v20: 머리-등 각이 이보다 작으면 등이 굽음·고개 떨굼 (실측: 바른 반복 157° 이상, 등 굽힌 반복 103~133°)
   headNoRep: 135,       // 이보다 작으면 모드와 상관없이 안 셈 (안전)
   hipBackMin: 0.09,     // v20: 엉덩이가 발목보다 다리 길이의 9% 이상 뒤로 빠져야 힙힌지 (실측: 바른 반복 10~13%, 허리로 숙인 반복 1~8%)
   minRepMs: 600,
@@ -42,9 +45,9 @@ export const THRESHOLDS = {
 export const MODES = {
   // 편하게: 상체 45°까지 숙이면 인정, 무릎 130°보다 더 굽히면 지적, 110°보다 더 굽히면 스쿼트가 된 것으로 보고 안 셈
   // v20 1차 실측(정확하게 63%): 등 굽힘·허리로 숙임·무릎 편 채 빠르게 숙인 반복을 셈 → 아래 안 셈 기준 추가
-  relaxed: { depthLean: 45, kneeMin: 130, noRepKnee: 110, noRepHipBack: 0.08, noRepLock: false, noRepFastMs: 1200, noRepDepthOver: 5 },
+  relaxed: { depthLean: 45, kneeMin: 130, noRepKnee: 110, noRepHipBack: 0.08, noRepLock: false, noRepFastMs: 1200, noRepDepthOver: 5, noRepTorso: 88 },
   // 정확하게: 상체 70°(바닥과 거의 평행), 무릎 145°, 125°
-  strict: { depthLean: 70, kneeMin: 145, noRepKnee: 125, noRepHipBack: 0.08, noRepLock: true, noRepFastMs: 1200 },
+  strict: { depthLean: 70, kneeMin: 145, noRepKnee: 125, noRepHipBack: 0.08, noRepLock: true, noRepFastMs: 1200, noRepTorso: 92 },
   // v21 2차 실측(편하게): 30~39°만 살짝 숙여도 셈, 등을 말고 고개는 든 채 1~1.2초에 숙인 반복도 셈
   // → 편하게도 40° 미만은 안 셈, 1.2초보다 빠르게 숙이면 두 모드 모두 안 셈(통제 안 된 동작)
   // v22 3차 실측(편하게 19/19 일치): 바른 반복도 엉덩이 뒤로 8~9%가 나와 정확하게 안 셈 기준 9% → 8%
@@ -99,8 +102,9 @@ export function measure(lm, aspect = 1) {
   };
 }
 
-const CUES = ['head', 'hips', 'knee', 'lock', 'depth', 'over', 'tempo'];
+const CUES = ['back', 'head', 'hips', 'knee', 'lock', 'depth', 'over', 'tempo'];
 export const CUE_TEXT = {
+  back: '등이 둥글게 말려요. 가슴을 펴고 등을 곧게 펴세요',
   head: '고개를 들고 등을 곧게 펴세요',
   hips: '허리로 숙이지 말고 엉덩이를 뒤로 빼세요',
   lock: '무릎을 살짝 굽혀주세요',
@@ -111,6 +115,7 @@ export const CUE_TEXT = {
   shallow: '엉덩이를 뒤로 빼면서 더 숙여야 한 번으로 세요',
 };
 export const NOREP_TEXT = {
+  back: '등이 말려서 이번은 세지 않아요',
   head: '등이 굽어서 이번은 세지 않아요',
   hips: '엉덩이를 뒤로 빼지 않아서 이번은 세지 않아요',
   lock: '무릎을 편 채 숙여서 이번은 세지 않아요',
@@ -175,7 +180,7 @@ export class GoodMorningCounter {
       if (s.lean > t.leaveLean) { if (this.leaveAt == null) this.leaveAt = now; } else this.leaveAt = null;
       if (s.lean > t.startLean) {
         this.state = 'down';
-        this.cur = { startAt: this.leaveAt ?? now, bottomAt: now, maxLean: s.lean, minHip: s.hip, minKnee: s.knee, maxHipBack: s.hipBack, minHead: s.head, minTorso: s.torsoRatio };
+        this.cur = { startAt: this.leaveAt ?? now, bottomAt: now, maxLean: s.lean, minHip: s.hip, minKnee: s.knee, maxHipBack: s.hipBack, minHead: s.head, minTorso: s.torsoRatio, maxCurve: null };
       }
       return { event: 'tracking', lean: s.lean };
     }
@@ -187,6 +192,7 @@ export class GoodMorningCounter {
     c.minKnee = Math.min(c.minKnee, s.knee);
     c.maxHipBack = Math.max(c.maxHipBack, s.hipBack);
     if (s.lean > t.countLean) c.minTorso = Math.min(c.minTorso, s.torsoRatio);
+    if (m.curve != null && s.lean > t.countLean) c.maxCurve = c.maxCurve == null ? m.curve : Math.max(c.maxCurve, m.curve);
     if (s.head != null && s.lean > t.countLean) c.minHead = c.minHead == null ? s.head : Math.min(c.minHead, s.head);
     if (s.lean < t.returnLean) {
       this.state = 'up'; this.cur = null; this.leaveAt = null;
@@ -206,6 +212,8 @@ export class GoodMorningCounter {
     const faults = [];
     const depthOk = c.maxLean >= t.depthLean;
     const descent = c.bottomAt - c.startAt;
+    const torsoPct = this.baseTorso ? c.minTorso / this.baseTorso * 100 : null;
+    if (torsoPct != null && torsoPct < t.torsoFault) faults.push('back');
     if (c.minHead != null && c.minHead < t.headFault) faults.push('head');
     if (c.maxHipBack < t.hipBackMin) faults.push('hips');
     if (c.minKnee < t.kneeMin) faults.push('knee');
@@ -216,6 +224,7 @@ export class GoodMorningCounter {
     let score = 100;
     if (faults.includes('knee')) score -= Math.min(30, (t.kneeMin - c.minKnee) * 1.5 + 10);
     if (!depthOk) score -= Math.min(35, (t.depthLean - c.maxLean) * 1.5 + 10);
+    if (faults.includes('back')) score -= 25;
     if (faults.includes('head')) score -= 20;
     if (faults.includes('hips')) score -= 15;
     if (faults.includes('lock')) score -= 10;
@@ -232,7 +241,8 @@ export class GoodMorningCounter {
     }
     // 세지 않는 반복: 무릎을 많이 굽혀 스쿼트가 됨, 깊이가 크게 모자람
     let noRep = null;
-    if (c.minHead != null && c.minHead < t.headNoRep) noRep = 'head';
+    if (torsoPct != null && torsoPct < t.noRepTorso) noRep = 'back';
+    else if (c.minHead != null && c.minHead < t.headNoRep) noRep = 'head';
     else if (c.minKnee < t.noRepKnee) noRep = 'knee';
     else if (c.maxLean < t.depthLean - t.noRepDepthOver) noRep = 'depth';
     else if (c.maxHipBack < t.noRepHipBack) noRep = 'hips';
@@ -245,9 +255,35 @@ export class GoodMorningCounter {
       lean: Math.round(c.maxLean), minHip: Math.round(c.minHip), minKnee: Math.round(c.minKnee),
       hipBack: Math.round(c.maxHipBack * 100), head: c.minHead == null ? null : Math.round(c.minHead),
       descentMs: Math.round(c.bottomAt - c.startAt),
-      torso: this.baseTorso ? Math.round(c.minTorso / this.baseTorso * 100) : null, // 몸통 길이(서 있을 때 대비 %)
+      torso: torsoPct == null ? null : Math.round(torsoPct), // 몸통 길이(서 있을 때 대비 %)
+      curve: c.maxCurve == null ? null : Math.round(c.maxCurve * 10) / 10, // 등 윤곽 휨 %
     };
     this.repLog.push(rec);
     return { event: noRep ? 'norep' : 'rep', rep: rec, speakCue };
   }
+}
+
+// v23: 사람 윤곽(세그멘테이션 마스크)으로 등이 둥글게 휘었는지 잼. 랜드마크에는 척추 점이 없어서
+// 어깨-엉덩이 직선에서 등 쪽(무릎 반대쪽)으로 몸 윤곽까지의 거리를 여러 지점에서 재고,
+// 가운데가 양 끝을 이은 선보다 얼마나 불룩 나왔는지(몸통 길이 대비 %)를 돌려줌. 곧은 등은 0 근처
+// mask: Float32Array(W*H, 0~1 사람일 확률), S·Hp·K: 어깨·엉덩이·무릎 픽셀 좌표
+export function backCurve(mask, W, H, S, Hp, K) {
+  const dx = Hp.x - S.x, dy = Hp.y - S.y, len = Math.hypot(dx, dy);
+  if (len < 20) return null;
+  let nx = -dy / len, ny = dx / len;
+  if (nx * (K.x - S.x) + ny * (K.y - S.y) > 0) { nx = -nx; ny = -ny; } // 무릎 반대쪽이 등
+  const ts = [0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85], off = [];
+  for (const t of ts) {
+    const px = S.x + dx * t, py = S.y + dy * t;
+    let k = 0;
+    for (; k < len * 0.8; k += 1) {
+      const ix = Math.round(px + nx * k), iy = Math.round(py + ny * k);
+      if (ix < 0 || iy < 0 || ix >= W || iy >= H || mask[iy * W + ix] < 0.5) break;
+    }
+    off.push(k);
+  }
+  const a = off[0], b = off[off.length - 1];
+  let bulge = -Infinity;
+  for (let i = 1; i < off.length - 1; i++) bulge = Math.max(bulge, off[i] - (a + (b - a) * (ts[i] - ts[0]) / (ts[ts.length - 1] - ts[0])));
+  return bulge / len * 100;
 }

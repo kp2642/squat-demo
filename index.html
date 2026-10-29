@@ -67,7 +67,7 @@ label.lbl{font-size:14px;font-weight:600}
 <body>
 
 <section id="intro" class="screen on">
-  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v22</small></h1>
+  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v23</small></h1>
   <div>
     <label class="lbl">종목</label>
     <div class="seg" id="exercise" style="grid-template-columns:1fr 1fr 1fr">
@@ -152,9 +152,9 @@ label.lbl{font-size:14px;font-weight:600}
 </section>
 
 <script type="module">
-import * as SQ from './squat-logic.js?v=22';
-import * as PU from './pushup-logic.js?v=22';
-import * as GM from './goodmorning-logic.js?v=22';
+import * as SQ from './squat-logic.js?v=23';
+import * as PU from './pushup-logic.js?v=23';
+import * as GM from './goodmorning-logic.js?v=23';
 
 // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식
 const EXERCISES = {
@@ -214,7 +214,7 @@ const EXERCISES = {
     intro: '데드리프트의 기본이 되는 "엉덩이 접기" 동작이에요. 발은 골반 너비로 서서 손을 가슴 앞에 X자로 모으고, 무릎은 살짝만 굽혀요. 고개는 등과 일직선으로 두고, 등을 곧게 편 채 엉덩이를 뒤로 밀면서 2초쯤 천천히 상체를 숙이고, 허벅지 뒤가 당기면 엉덩이를 앞으로 밀며 일어나요. 휴대폰을 세로로 세워두고 옆모습이 보이게 서요(초광각이면 1m까지 가까이). 숙일 때 앞쪽으로 상체 길이만큼 공간이 필요해요. 영상은 이 휴대폰 밖으로 나가지 않아요.',
     tips: ['1.5m', '허리 높이'], minSpan: 0.3, axis: 'y', core: () => [11, 23, 25, 27], down: [23, 24, 27, 28], // 엉덩이 → 발목이 아래쪽 (숙여도 변하지 않음)
     modeNote: {
-      relaxed: '상체를 45° 정도 숙이면 인정해요(40° 미만은 안 셈). 등이 굽거나, 허리로만 숙이거나, 1초 남짓 만에 빠르게 숙이면 세지 않아요.',
+      relaxed: '상체를 45° 정도 숙이면 인정해요(40° 미만은 안 셈). 등이 크게 말리거나, 허리로만 숙이거나, 1초 남짓 만에 빠르게 숙이면 세지 않아요.',
       strict: '상체가 바닥과 거의 평행(70°)할 만큼 숙여야 인정해요. 등 굽힘, 허리로만 숙이기, 무릎을 다 편 채 숙이기, 1.2초보다 빠르게 숙이기는 세지 않아요.',
     },
     startSay: '옆으로 서서 손을 가슴에 모아 주세요. 똑바로 서서 잠깐 멈추면 시작해요. 등은 곧게, 엉덩이를 뒤로 빼면서 숙이세요.',
@@ -223,7 +223,7 @@ const EXERCISES = {
     setupMsg: '손을 가슴에 모으고 똑바로 서서 잠깐 멈춰주세요',
     lostMsg: '다시 똑바로 서서 잠깐 멈춰주세요',
     measure: (lm, aspect) => GM.measure(lm, aspect),
-    debug: (m, c) => `상체 숙임 ${m.lean.toFixed(0)}°\n엉덩이각 ${m.hip.toFixed(0)}° · 무릎각 ${m.knee.toFixed(0)}°\n엉덩이 뒤로 ${(m.hipBack * 100).toFixed(0)}% · 머리-등 ${m.head == null ? '-' : m.head.toFixed(0) + '°'}\n측면 ${m.sideView ? '예' : '아니오'} (${m.spread.toFixed(2)})\n단계 ${c.state}`,
+    debug: (m, c) => `상체 숙임 ${m.lean.toFixed(0)}° · 등 휨 ${m.curve == null ? '-' : m.curve.toFixed(1) + '%'}\n엉덩이각 ${m.hip.toFixed(0)}° · 무릎각 ${m.knee.toFixed(0)}°\n엉덩이 뒤로 ${(m.hipBack * 100).toFixed(0)}% · 머리-등 ${m.head == null ? '-' : m.head.toFixed(0) + '°'}\n측면 ${m.sideView ? '예' : '아니오'} (${m.spread.toFixed(2)})\n단계 ${c.state}`,
     joints: (m) => m && m.side === 'right' ? [8, 12, 24, 26, 28] : [7, 11, 23, 25, 27],
     arc: { at: 2, value: (m) => m.hip },
     colors(m, t) {
@@ -233,7 +233,7 @@ const EXERCISES = {
       return [torso, torso, leg, leg];
     },
     detail: (r) => `상체 ${r.lean}° · 무릎 ${r.minKnee}° · 엉덩이 뒤로 ${r.hipBack}%`,
-    line: (r) => `상체 숙임 ${r.lean}° / 엉덩이각 ${r.minHip}° / 무릎 ${r.minKnee}° / 엉덩이 뒤로 ${r.hipBack}% / 머리-등 ${r.head ?? '-'}° / 몸통 ${r.torso ?? '-'}% / 하강시간 ${r.descentMs}ms`,
+    line: (r) => `상체 숙임 ${r.lean}° / 엉덩이각 ${r.minHip}° / 무릎 ${r.minKnee}° / 엉덩이 뒤로 ${r.hipBack}% / 머리-등 ${r.head ?? '-'}° / 몸통 ${r.torso ?? '-'}% / 등 휨 ${r.curve ?? '-'}% / 하강시간 ${r.descentMs}ms`,
   },
 };
 let exercise = 'squat', pstyle = 'knees';
@@ -310,6 +310,8 @@ async function start() {
     v.classList.toggle('mirror', front); $('overlay').classList.toggle('mirror', front);
     $('startBtn').textContent = '자세 인식 모델 불러오는 중...';
     await loadModel();
+    // v23: 굿모닝은 등 윤곽을 보려고 사람 윤곽(세그멘테이션)도 받음. 다른 종목은 끔(속도)
+    try { await landmarker.setOptions({ outputSegmentationMasks: exercise === 'goodmorning' }); } catch {}
   } catch (e) {
     stopCamera();
     $('err').textContent = e && e.name === 'NotAllowedError'
@@ -482,6 +484,19 @@ function loop() {
     const lm = res.landmarks && res.landmarks[0];
     const up = lm ? upright(lm, v.videoWidth / v.videoHeight) : null;
     const m = up ? EX().measure(up.lm, up.aspect) : null;
+    const mask = res.segmentationMasks && res.segmentationMasks[0];
+    if (mask) {
+      // 숙인 동안에만 윤곽을 읽음 (GPU → CPU 복사가 느려서)
+      if (exercise === 'goodmorning' && m && m.visible && counter.state === 'down') {
+        try {
+          const W = mask.width, H = mask.height, arr = mask.getAsFloat32Array();
+          const [si, hi, ki] = m.side === 'right' ? [12, 24, 26] : [11, 23, 25];
+          const px = (i) => ({ x: lm[i].x * W, y: lm[i].y * H });
+          m.curve = GM.backCurve(arr, W, H, px(si), px(hi), px(ki));
+        } catch {}
+      }
+      res.segmentationMasks.forEach(k => k.close && k.close());
+    }
     draw(lm, m);
     if ($('debug').style.display === 'block') {
       $('debug').textContent = m && m.visible
@@ -569,7 +584,7 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EX().line(r)} / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `${EX().name} 데모 v22 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `${EX().name} 데모 v23 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
