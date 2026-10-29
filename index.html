@@ -61,13 +61,44 @@ label.lbl{font-size:14px;font-weight:600}
 .rep button.sel{background:var(--blue);color:#fff;border-color:var(--blue)}
 .rep button.selno{background:#B35900;color:#fff;border-color:#B35900}
 #accuracy{font-size:15px;font-weight:600}
+/* v28: 운동 한 세션 (워밍업 → 세트·휴식 → 쿨다운 → 요약) */
+.light{background:var(--bg);color:var(--ink);padding:calc(env(safe-area-inset-top) + 24px) 20px calc(env(safe-area-inset-bottom) + 20px);gap:14px;overflow:auto}
+.light h2{margin:0;font-size:22px}
+.kicker{font-size:13px;color:var(--muted);font-weight:600}
+.big{font-size:68px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums;line-height:1.1}
+.bar{height:8px;background:#EEE;border-radius:99px;overflow:hidden}.bar i{display:block;height:100%;background:var(--blue);width:0}
+.rpe{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.rpe button{height:48px;border:1px solid #D6D6D6;border-radius:10px;background:#fff;font-size:14px;color:var(--ink)}
+.rpe button.sel{background:var(--blue);color:#fff;border-color:var(--blue)}
+.card{background:#F7F7F7;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.55}
+.btnrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btnrow button{height:48px;border:1px solid #D6D6D6;border-radius:12px;background:#fff;font-size:15px;color:var(--ink)}
+#rPrev{width:100%;aspect-ratio:4/3.75;border:0;border-radius:12px;background:#EEF1F6;display:block}
+.plan{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.plan li{display:flex;justify-content:space-between;gap:8px;background:#F7F7F7;border-radius:10px;padding:10px 12px;font-size:14px}
+.plan li span{color:var(--muted)}
+.linkbtn{border:none;background:none;color:var(--muted);font-size:14px;text-decoration:underline;padding:8px}
 @media (orientation:landscape){#live{flex-direction:row}#ctrl{grid-template-columns:1fr;grid-auto-rows:min-content;align-content:center;width:170px;padding:12px calc(env(safe-area-inset-right) + 12px) 12px 12px}#ctrl button{height:48px;font-size:15px}#count{font-size:44px}#count small{font-size:18px}}
 </style>
 </head>
 <body>
 
 <section id="intro" class="screen on">
-  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v27</small></h1>
+  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v28</small></h1>
+  <div class="seg" id="flow" style="grid-template-columns:1fr 1fr">
+    <button data-v="single" class="sel">종목 하나 테스트</button><button data-v="session">오늘의 운동 (세션)</button>
+  </div>
+  <div id="sessionBox" style="display:none;flex-direction:column;gap:12px">
+    <p style="margin:0">실제 하루 운동처럼 워밍업부터 쿨다운까지 이어서 해요. 세트마다 카메라가 세고 자세를 봐 주고, 세트 사이에는 휴식 타이머가 돌아요.</p>
+    <div>
+      <label class="lbl">길이</label>
+      <div class="seg" id="slen" style="grid-template-columns:1fr 1fr">
+        <button data-v="full" class="sel">전체 (약 25분)</button><button data-v="quick">빠른 체험 (약 7분)</button>
+      </div>
+    </div>
+    <ul class="plan" id="planList"></ul>
+  </div>
+  <div id="singleBox" style="display:flex;flex-direction:column;gap:18px">
   <div>
     <label class="lbl">종목</label>
     <div class="seg" id="exercise" style="grid-template-columns:1fr 1fr 1fr">
@@ -81,18 +112,19 @@ label.lbl{font-size:14px;font-weight:600}
     <div class="tip"><b id="tipHeight">허리 높이</b><span>폰 거치 위치</span></div>
     <div class="tip"><b>측면</b><span>옆모습이 보이게</span></div>
   </div>
+  <div>
+    <label class="lbl">목표 횟수</label>
+    <div class="seg" id="target">
+      <button data-v="5">5회</button><button data-v="10">10회</button><button data-v="12" class="sel">12회</button><button data-v="15">15회</button>
+    </div>
+  </div>
+  </div>
   <div id="styleBox" style="display:none">
     <label class="lbl">푸시업 자세</label>
     <div class="seg" id="pstyle" style="grid-template-columns:1fr 1fr 1fr">
       <button data-v="incline">의자 짚고 (처음)</button><button data-v="knees" class="sel">무릎 대고 (입문)</button><button data-v="full">기본</button>
     </div>
     <p class="note" style="margin:6px 0 0">처음이면 의자나 소파를 짚고 시작해서, 바른 자세로 12회씩 2세트가 되면 무릎 대고 → 기본 순서로 올라가세요. 무릎 대고 할 때는 몸통이 일직선인지 무릎까지 봐요.</p>
-  </div>
-  <div>
-    <label class="lbl">목표 횟수</label>
-    <div class="seg" id="target">
-      <button data-v="5">5회</button><button data-v="10">10회</button><button data-v="12" class="sel">12회</button><button data-v="15">15회</button>
-    </div>
   </div>
   <div>
     <label class="lbl">자세 판정 기준</label>
@@ -119,7 +151,7 @@ label.lbl{font-size:14px;font-weight:600}
     <video id="video" playsinline muted autoplay></video>
     <canvas id="overlay"></canvas>
     <div id="hud">
-      <div id="count">0<small> / 12</small></div>
+      <div><div id="setChip" class="chip" style="display:none;margin-bottom:6px;width:max-content"></div><div id="count">0<small> / 12</small></div></div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         <span class="chip" id="voiceChip">음성 켜짐</span>
         <button class="chip" id="dbgBtn" style="border:none">수치 보기</button>
@@ -153,10 +185,63 @@ label.lbl{font-size:14px;font-weight:600}
   <button class="primary" id="againBtn">한 세트 더</button>
 </section>
 
+<section id="timer" class="screen light">
+  <div class="kicker" id="tKicker">워밍업</div>
+  <h2 id="tName"></h2>
+  <p class="note" id="tDesc" style="font-size:15px;margin:0"></p>
+  <div style="flex:1"></div>
+  <div class="big" id="tTime">0:00</div>
+  <div class="bar"><i id="tBar"></i></div>
+  <div class="card" id="tNext"></div>
+  <div style="flex:1"></div>
+  <div class="btnrow"><button id="tPause">일시정지</button><button id="tSkip">다음 동작</button></div>
+  <button class="linkbtn" id="tSkipAll">이 단계 건너뛰기</button>
+  <button class="linkbtn" id="tQuit">운동 그만하기</button>
+</section>
+
+<section id="rest" class="screen light">
+  <div class="kicker">휴식 중</div>
+  <h2 id="rTitle"></h2>
+  <div class="big" id="rTime">1:30</div>
+  <div class="btnrow" id="rBtns"><button id="rPlus">+30초</button><button id="rSkip">휴식 건너뛰기</button></div>
+  <button class="primary" id="rGo" style="display:none">다음 시작</button>
+  <div>
+    <b style="font-size:15px">방금 세트, 얼마나 힘들었나요?</b>
+    <div class="rpe" id="rpe" style="margin-top:8px"><button data-v="easy">쉬웠어요</button><button data-v="ok">적당해요</button><button data-v="hard">힘들어요</button><button data-v="max">한계예요</button></div>
+    <p class="note" id="rpeNote" style="margin:6px 0 0">답에 따라 다음 세트의 횟수를 조절해요.</p>
+  </div>
+  <div class="card" id="rScore"></div>
+  <div>
+    <b style="font-size:15px" id="rNextT">다음 운동 미리보기</b>
+    <p class="note" id="rPlace" style="margin:4px 0 8px"></p>
+    <iframe id="rPrev" title="다음 운동 시범"></iframe>
+  </div>
+  <button class="linkbtn" id="rQuit">운동 그만하기</button>
+</section>
+
+<section id="done" class="screen light">
+  <div class="kicker" id="dKicker"></div>
+  <h2>오늘 운동 끝!</h2>
+  <div class="stats">
+    <div class="stat"><span>운동 시간</span><b id="dTime">-</b></div>
+    <div class="stat"><span>완료 세트</span><b id="dSets">-</b></div>
+    <div class="stat"><span>총 반복</span><b id="dReps">-</b></div>
+  </div>
+  <div id="dEx" style="display:flex;flex-direction:column;gap:8px"></div>
+  <div>
+    <b style="font-size:15px">다음엔 이것만 신경 써요</b>
+    <div id="dTips" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div>
+  </div>
+  <div class="card" id="dNext"></div>
+  <div style="flex:1"></div>
+  <button class="ghost" id="dCopy">결과 복사하기</button>
+  <button class="primary" id="dHome">처음으로</button>
+</section>
+
 <script type="module">
-import * as SQ from './squat-logic.js?v=27';
-import * as PU from './pushup-logic.js?v=27';
-import * as GM from './goodmorning-logic.js?v=27';
+import * as SQ from './squat-logic.js?v=28';
+import * as PU from './pushup-logic.js?v=28';
+import * as GM from './goodmorning-logic.js?v=28';
 
 // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식
 const EXERCISES = {
@@ -238,7 +323,7 @@ const EXERCISES = {
     line: (r) => `상체 숙임 ${r.lean}° / 엉덩이각 ${r.minHip}° / 무릎 ${r.minKnee}° / 엉덩이 뒤로 ${r.hipBack}% / 머리-등 ${r.head ?? '-'}° / 몸통 ${r.torso ?? '-'}% / 등 휨 ${r.curve ?? '-'}% / 하강시간 ${r.descentMs}ms`,
   },
 };
-let exercise = 'squat', pstyle = 'knees';
+let exercise = 'squat', pstyle = 'knees', flow = 'single', session = null;
 const EX = () => EXERCISES[exercise];
 let CUE_TEXT = SQ.CUE_TEXT, NOREP_TEXT = SQ.NOREP_TEXT;
 
@@ -268,7 +353,7 @@ function applyExercise() {
   $('introText').textContent = e.intro;
   $('tipDist').textContent = e.tips[0]; $('tipHeight').textContent = e.tips[1];
   $('modeNote').textContent = e.modeNote[mode];
-  $('styleBox').style.display = exercise === 'pushup' ? 'block' : 'none';
+  $('styleBox').style.display = exercise === 'pushup' || flow === 'session' ? 'block' : 'none';
   document.title = e.name + ' 코치 데모';
 }
 seg('exercise', v => { exercise = v; applyExercise(); });
@@ -285,7 +370,13 @@ function say(text, interrupt = false) {
   speechSynthesis.speak(u);
 }
 
-async function loadModel() {
+// 세션에서는 워밍업 동안 미리 불러오므로, 동시에 두 번 불려도 한 번만 만들게 함
+let modelP = null;
+function loadModel() {
+  if (!modelP) modelP = makeModel().catch(e => { modelP = null; throw e; });
+  return modelP;
+}
+async function makeModel() {
   if (landmarker) return landmarker;
   const { FilesetResolver, PoseLandmarker } = await import(MP_BASE + '/vision_bundle.mjs');
   const fileset = await FilesetResolver.forVisionTasks(MP_BASE + '/wasm');
@@ -304,12 +395,15 @@ async function start() {
   $('startBtn').disabled = true; $('startBtn').textContent = '준비 중...';
   say('', true); // iOS 음성 잠금 해제
   try {
-    stream = await openCamera();
-    const v = $('video'); v.srcObject = stream; await v.play();
-    const track = stream.getVideoTracks()[0];
-    camLabel = track.label || '';
-    const front = (track.getSettings && track.getSettings().facingMode === 'user') || /front|전면/i.test(camLabel);
-    v.classList.toggle('mirror', front); $('overlay').classList.toggle('mirror', front);
+    // 세션 중에는 세트마다 카메라를 다시 열지 않고 그대로 씀
+    if (!(stream && stream.active)) {
+      stream = await openCamera();
+      const v = $('video'); v.srcObject = stream; await v.play();
+      const track = stream.getVideoTracks()[0];
+      camLabel = track.label || '';
+      const front = (track.getSettings && track.getSettings().facingMode === 'user') || /front|전면/i.test(camLabel);
+      v.classList.toggle('mirror', front); $('overlay').classList.toggle('mirror', front);
+    } else { await $('video').play().catch(() => {}); }
     $('startBtn').textContent = '자세 인식 모델 불러오는 중...';
     await loadModel();
     // v23: 굿모닝은 등 윤곽을 보려고 사람 윤곽(세그멘테이션)도 받음. 다른 종목은 끔(속도)
@@ -321,6 +415,7 @@ async function start() {
       : '시작하지 못했어요: ' + (e && e.message ? e.message : e);
     $('err').style.display = 'block';
     $('startBtn').disabled = false; $('startBtn').textContent = '시작하기';
+    if (session) { session = null; show('intro'); applyFlow(); }
     return;
   }
   counter = new (EX().Counter)(mode); CUE_TEXT = EX().lib.CUE_TEXT; NOREP_TEXT = EX().lib.NOREP_TEXT;
@@ -328,6 +423,9 @@ async function start() {
   if (exercise === 'pushup' && pstyle === 'knees') counter.t.pikeTol += 15; // 무릎 푸시업은 엉덩이 각도가 덜 정확하게 잡혀 여유를 더 줌
   if (exercise === 'pushup' && pstyle === 'knees') { CUE_TEXT = { ...CUE_TEXT, pike: '엉덩이를 앞으로 밀어 무릎부터 어깨까지 일직선으로' }; NOREP_TEXT = { ...NOREP_TEXT, pike: '엉덩이가 뒤로 빠져서 이번은 세지 않아요' }; } results = []; rot.k = -1; rot.n = 0;
   $('count').innerHTML = `0<small> / ${target}</small>`;
+  const it = session && session.items[session.i];
+  $('setChip').style.display = it ? 'block' : 'none';
+  if (it) $('setChip').textContent = `${EX().name} ${it.set} / ${it.of}세트`;
   setStatus(ultraMissing ? '초광각 카메라를 찾지 못해 일반 뒷면 카메라로 시작해요' : EX().startStatus, ultraMissing);
   if (ultraMissing) say('초광각 카메라를 찾지 못해 일반 뒷면 카메라로 시작해요');
   show('live'); running = true; notVisibleSince = performance.now(); guide = { k: null, since: 0, spokenK: null, spokenAt: 0, guided: false };
@@ -548,6 +646,7 @@ function stopCamera() {
 }
 
 function endSet() {
+  if (session) { if (running) sessionSetDone(); return; }
   if (!running && !stream) return;
   stopCamera();
   const log = counter.repLog;
@@ -579,7 +678,7 @@ function acc() {
   $('accuracy').textContent = done.length ? `판정 정확도 ${Math.round(n('ok') / done.length * 100)}% (${done.length}회 응답 · 너그러움 ${n('lenient')} · 엄격함 ${n('harsh')})` : '';
 }
 
-$('startBtn').onclick = start;
+$('startBtn').onclick = () => flow === 'session' ? startSession() : start();
 // 시범·가이드: 시작 화면에서는 같은 창, 결과 화면에서는 결과가 사라지지 않게 새 창
 const guideUrl = (tab) => `guide.html?ex=${exercise}${exercise === 'pushup' ? '&style=' + (pstyle === 'full' ? 'full' : 'knees') : ''}${tab ? '&tab=' + tab : ''}`;
 $('guideBtn').onclick = () => { location.href = guideUrl(); };
@@ -590,10 +689,206 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EX().line(r)} / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `${EX().name} 데모 v27 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `${EX().name} 데모 v28 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
+// ───────── v28: 운동 한 세션 (11단계 기획: 워밍업 5분 → 종목별 세트·휴식·체감 강도 → 쿨다운 5분 → 요약) ─────────
+// [이름, 설명, 초]. 워밍업은 가벼운 유산소 + 동적 스트레칭, 쿨다운은 천천히 걷기 + 정적 스트레칭 (ACSM 5~10분)
+const WARMUP = [
+  ['제자리 걷기', '팔을 흔들며 가볍게 걸어요', 60], ['팔 크게 돌리기', '앞으로 15번, 뒤로 15번', 30],
+  ['다리 앞뒤로 흔들기', '벽을 짚고 한쪽씩 20초', 40], ['엉덩이 접기 연습', '손을 허리에 두고 엉덩이를 뒤로 빼며 살짝 숙였다 일어나요', 40],
+  ['반만 앉는 스쿼트', '편한 깊이까지만 천천히 앉았다 일어나요', 40], ['벽 짚고 팔굽혀펴기', '벽에 손을 짚고 천천히 굽혔다 펴요', 40],
+  ['고양이-소 자세', '네발 자세에서 등을 천천히 둥글게 말았다가 펴요', 50],
+];
+const COOLDOWN = [
+  ['천천히 제자리 걷기', '숨을 고르며 천천히 걸어요', 60],
+  ['허벅지 앞 늘이기 · 오른쪽', '벽을 짚고 오른쪽 발목을 잡아 엉덩이 쪽으로 당겨요', 30], ['허벅지 앞 늘이기 · 왼쪽', '반대쪽도 똑같이', 30],
+  ['허벅지 뒤 늘이기 · 오른쪽', '오른발을 앞으로 뻗고 등을 편 채 상체를 숙여요', 30], ['허벅지 뒤 늘이기 · 왼쪽', '반대쪽도 똑같이', 30],
+  ['엉덩이 늘이기 · 오른쪽', '누워서 오른쪽 발목을 왼쪽 무릎 위에 올려 4자 모양으로 당겨요', 30], ['엉덩이 늘이기 · 왼쪽', '반대쪽도 똑같이', 30],
+  ['가슴 늘이기', '문틀에 팔을 대고 몸을 천천히 앞으로', 30], ['아기 자세', '무릎을 꿇고 엎드려 팔을 앞으로 길게 뻗어요', 30],
+];
+// 자리 안내: 종목이 바뀔 때 휴식 화면과 음성으로
+const PLACE = {
+  squat: '휴대폰을 허리 높이에 세로로 세우고, 옆모습이 보이게 서요.',
+  goodmorning: '스쿼트와 같은 자리에서 옆으로 서요. 숙일 때 앞쪽에 공간이 필요해요. 손은 가슴에 X자로.',
+  pushup: '휴대폰을 바닥에 가로로 세우고, 옆모습이 보이게 엎드려요.',
+};
+const RPE = { easy: ['쉬웠어요', 2], ok: ['적당해요', 0], hard: ['힘들어요', 0], max: ['한계예요', -2] };
+let slen = 'full';
+function buildPlan() {
+  const quick = slen === 'quick', sets = quick ? 1 : 2, scale = (list) => list.map(([n, d, t]) => [n, d, quick ? Math.max(6, Math.round(t / 6)) : t]);
+  const items = [{ kind: 'timer', key: 'warmup', title: '워밍업', steps: scale(WARMUP) }];
+  // 입문자 기준: 종목당 2세트 × 10회 안팎, 휴식 스쿼트 90초·나머지 60초 (와이어프레임 홈 화면과 같음)
+  for (const [ex, reps, rest] of [['squat', 10, 90], ['goodmorning', 10, 60], ['pushup', pstyle === 'full' ? 8 : 10, 60]])
+    for (let n = 1; n <= sets; n++) items.push({ kind: 'set', ex, set: n, of: sets, reps: quick ? 5 : reps, rest: quick ? 20 : rest });
+  items.push({ kind: 'timer', key: 'cooldown', title: '쿨다운', steps: scale(COOLDOWN) });
+  return items;
+}
+const fmt = (sec) => `${Math.floor(sec / 60)}:${String(Math.max(0, Math.floor(sec % 60))).padStart(2, '0')}`;
+function renderPlan() {
+  const items = buildPlan(), li = [];
+  for (const it of items) {
+    if (it.kind === 'timer') li.push(`<li><b>${it.title}</b><span>${fmt(it.steps.reduce((a, s) => a + s[2], 0))} · ${it.key === 'warmup' ? '걷기 + 동적 스트레칭' : '걷기 + 정적 스트레칭'}</span></li>`);
+    else if (it.set === 1) li.push(`<li><b>${EXERCISES[it.ex].name}${it.ex === 'pushup' ? ' (' + ({ full: '기본', knees: '무릎 대고', incline: '의자 짚고' })[pstyle] + ')' : ''}</b><span>${it.of}세트 × ${it.reps}회 · 휴식 ${it.rest}초</span></li>`);
+  }
+  $('planList').innerHTML = li.join('');
+}
+function applyFlow() {
+  $('sessionBox').style.display = flow === 'session' ? 'flex' : 'none';
+  $('singleBox').style.display = flow === 'session' ? 'none' : 'flex';
+  $('startBtn').textContent = flow === 'session' ? '오늘의 운동 시작' : '시작하기';
+  applyExercise(); renderPlan();
+}
+seg('flow', v => { flow = v; applyFlow(); });
+seg('slen', v => { slen = v; renderPlan(); });
+$('pstyle').addEventListener('click', () => setTimeout(renderPlan));
+
+function startSession() {
+  say('', true); // iOS 음성 잠금 해제 (사용자 터치 안에서)
+  session = { items: buildPlan(), i: 0, startAt: Date.now(), sets: [], adj: {} };
+  loadModel().catch(() => {}); // 워밍업 동안 자세 인식 모델을 미리 받아 둠
+  runItem();
+}
+function runItem() {
+  const it = session.items[session.i];
+  if (!it) return finishSession();
+  if (it.kind === 'timer') return runTimer(it);
+  exercise = it.ex; applyExercise();
+  target = Math.max(5, Math.min(15, it.reps + (session.adj[it.ex] || 0)));
+  start();
+}
+// 워밍업·쿨다운 타이머
+let tm = null;
+function runTimer(it) {
+  show('timer');
+  tm = { it, k: 0, left: it.steps[0][2], paused: false, last: performance.now(), spoken: -1 };
+  clearInterval(tm.iv); tm.iv = setInterval(tickTimer, 200); tickTimer();
+}
+function tickTimer() {
+  const { it } = tm, now = performance.now();
+  if (!tm.paused) tm.left -= (now - tm.last) / 1000;
+  tm.last = now;
+  if (tm.left <= 0) { tm.k += 1; if (tm.k >= it.steps.length) return endTimer(); tm.left = it.steps[tm.k][2]; }
+  const [name, desc, dur] = it.steps[tm.k], nx = it.steps[tm.k + 1];
+  if (tm.spoken !== tm.k) { tm.spoken = tm.k; say(`${tm.k === 0 ? it.title + ' 시작. ' : ''}${name}. ${desc}`, true); }
+  $('tKicker').textContent = `${it.title} · ${tm.k + 1} / ${it.steps.length}`;
+  $('tName').textContent = name; $('tDesc').textContent = desc;
+  $('tTime').textContent = fmt(Math.ceil(tm.left));
+  $('tBar').style.width = `${(1 - tm.left / dur) * 100}%`;
+  const after = session.items[session.i + 1];
+  $('tNext').textContent = nx ? `다음: ${nx[0]}` : after ? `다음: ${EXERCISES[after.ex] ? EXERCISES[after.ex].name + ' 시작' : '운동 요약'}` : '다음: 오늘 운동 요약';
+}
+function endTimer() {
+  clearInterval(tm.iv);
+  const it = tm.it, after = session.items[session.i + 1];
+  if (it.key === 'warmup' && after) say(`워밍업 끝. 이제 ${EXERCISES[after.ex].name}를 시작해요. ${PLACE[after.ex]}`, true);
+  session.i += 1; runItem();
+}
+$('tPause').onclick = () => { tm.paused = !tm.paused; $('tPause').textContent = tm.paused ? '계속하기' : '일시정지'; };
+$('tSkip').onclick = () => { tm.left = 0; };
+$('tSkipAll').onclick = () => { tm.k = tm.it.steps.length; tm.left = 0; };
+$('tQuit').onclick = () => { clearInterval(tm.iv); finishSession(); };
+
+// 세트 끝 → 기록 → 휴식
+function sessionSetDone() {
+  running = false; cancelAnimationFrame(rafId);
+  const it = session.items[session.i];
+  const log = counter.repLog.map(r => ({ ...r }));
+  session.sets.push({ ex: it.ex, set: it.set, of: it.of, target, log, rpe: null, cue: CUE_TEXT, norep: NOREP_TEXT, mode, style: pstyle });
+  showRest();
+}
+let rs = null;
+function showRest() {
+  const done = session.sets[session.sets.length - 1], it = session.items[session.i], nx = session.items[session.i + 1];
+  const counted = done.log.filter(r => r.counted).length, avg = done.log.length ? Math.round(done.log.reduce((a, r) => a + r.score, 0) / done.log.length) : null;
+  $('rTitle').textContent = `${EXERCISES[done.ex].name} ${done.set} / ${done.of}세트 완료 · ${counted}회`;
+  // 이번 세트에서 가장 많이 나온 지적 하나
+  const cnt = {}; done.log.forEach(r => (r.faults || []).forEach(f => { if (f !== 'tempo' || true) cnt[f] = (cnt[f] || 0) + 1; }));
+  const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+  $('rScore').innerHTML = avg == null ? '이번 세트는 인식된 반복이 없어요.' : `<b>자세 점수 평균 ${avg}점</b>${done.log.length > counted ? ` · 안 센 반복 ${done.log.length - counted}회` : ''}<br>${top ? `다음 세트에서는: ${done.cue[top[0]] || top[0]} (${top[1]}회 지적)` : '지적 없이 좋았어요.'}`;
+  [...$('rpe').children].forEach(b => b.classList.remove('sel'));
+  $('rpeNote').textContent = '답에 따라 다음 세트의 횟수를 조절해요.';
+  const changing = nx && nx.kind === 'set' && nx.ex !== done.ex;
+  if (nx && nx.kind === 'set') {
+    $('rNextT').textContent = `다음: ${EXERCISES[nx.ex].name} ${nx.set} / ${nx.of}세트 · ${Math.max(5, Math.min(15, nx.reps + (session.adj[nx.ex] || 0)))}회`;
+    $('rPlace').textContent = changing ? PLACE[nx.ex] : '같은 자리에서 이어서 해요.';
+    const src = `guide.html?ex=${nx.ex}&embed=1${nx.ex === 'pushup' ? '&style=' + (pstyle === 'full' ? 'full' : 'knees') : ''}`;
+    if ($('rPrev').getAttribute('src') !== src) $('rPrev').setAttribute('src', src);
+    $('rPrev').style.display = 'block';
+  } else { $('rNextT').textContent = '다음: 쿨다운 5분'; $('rPlace').textContent = '마지막 세트까지 끝났어요. 체감 강도를 누르고 쿨다운을 시작하세요.'; $('rPrev').style.display = 'none'; $('rPrev').removeAttribute('src'); }
+  const restSec = nx && nx.kind === 'set' ? it.rest : 0;
+  rs = { left: restSec, last: performance.now(), warned: false };
+  $('rBtns').style.display = restSec ? 'grid' : 'none'; $('rTime').style.display = restSec ? 'block' : 'none';
+  $('rGo').style.display = restSec ? 'none' : 'block'; $('rGo').textContent = nx ? '쿨다운 시작' : '요약 보기';
+  show('rest');
+  say(`${counted}회 완료. 얼마나 힘들었는지 눌러 주세요.${changing ? ' 다음은 ' + EXERCISES[nx.ex].name + '예요. ' + PLACE[nx.ex] : ''}`, true);
+  clearInterval(rs.iv); if (restSec) rs.iv = setInterval(tickRest, 200);
+  tickRest();
+}
+function tickRest() {
+  if (!rs.left && !rs.iv) return;
+  const now = performance.now(); rs.left -= (now - rs.last) / 1000; rs.last = now;
+  $('rTime').textContent = fmt(Math.ceil(Math.max(0, rs.left)));
+  if (!rs.warned && rs.left <= 10) { rs.warned = true; say('10초 뒤에 다음 세트를 시작해요. 자리로 가 주세요.', true); }
+  if (rs.left <= 0) endRest();
+}
+function endRest() { clearInterval(rs.iv); rs.iv = null; session.i += 1; runItem(); }
+$('rPlus').onclick = () => { rs.left += 30; rs.warned = rs.left <= 10; };
+$('rSkip').onclick = endRest;
+$('rGo').onclick = endRest;
+$('rQuit').onclick = () => { clearInterval(rs.iv); finishSession(); };
+$('rpe').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...$('rpe').children].forEach(c => c.classList.toggle('sel', c === b));
+  const last = session.sets[session.sets.length - 1], prev = last.rpe; last.rpe = b.dataset.v;
+  // 같은 종목의 다음 세트 횟수를 조절 (쉬웠어요 +2, 한계예요 -2, 5~15회)
+  const d = RPE[b.dataset.v][1] - (prev ? RPE[prev][1] : 0); session.adj[last.ex] = (session.adj[last.ex] || 0) + d;
+  const nx = session.items[session.i + 1];
+  if (nx && nx.kind === 'set' && nx.ex === last.ex) {
+    const n = Math.max(5, Math.min(15, nx.reps + session.adj[last.ex]));
+    $('rpeNote').textContent = d || session.adj[last.ex] ? `다음 세트는 ${n}회로 할게요.` : '다음 세트도 같은 횟수로 해요.';
+    $('rNextT').textContent = `다음: ${EXERCISES[nx.ex].name} ${nx.set} / ${nx.of}세트 · ${n}회`;
+  } else $('rpeNote').textContent = b.dataset.v === 'easy' ? '다음 운동에서 이 종목 횟수를 늘릴게요.' : b.dataset.v === 'max' ? '다음 운동에서 이 종목 횟수를 줄일게요.' : '기록했어요.';
+});
+
+// 오늘 운동 요약 (와이어프레임 '종료 요약'과 같은 구성)
+function finishSession() {
+  running = false; cancelAnimationFrame(rafId);
+  if (stream) stream.getTracks().forEach(t => t.stop()); stream = null;
+  const S = session; if (!S) return;
+  const mins = Math.max(1, Math.round((Date.now() - S.startAt) / 60000)), planned = S.items.filter(i => i.kind === 'set').length;
+  const total = S.sets.reduce((a, x) => a + x.log.filter(r => r.counted).length, 0);
+  $('dKicker').textContent = `${slen === 'quick' ? '빠른 체험' : '오늘의 운동'} · ${mode === 'strict' ? '정확하게' : '편하게'} 모드`;
+  $('dTime').textContent = mins + '분'; $('dSets').textContent = `${S.sets.length} / ${planned}`; $('dReps').textContent = total + '회';
+  const byEx = {};
+  S.sets.forEach(x => { (byEx[x.ex] = byEx[x.ex] || []).push(x); });
+  $('dEx').innerHTML = Object.entries(byEx).map(([ex, xs]) => {
+    const reps = xs.flatMap(x => x.log), c = reps.filter(r => r.counted).length, avg = reps.length ? Math.round(reps.reduce((a, r) => a + r.score, 0) / reps.length) : '-';
+    return `<div class="card"><b>${EXERCISES[ex].name}</b> · ${xs.length}세트 · ${c}회 · 자세 평균 ${avg}${avg === '-' ? '' : '점'}<br><span class="note">체감: ${xs.map(x => x.rpe ? RPE[x.rpe][0] : '-').join(', ')}</span></div>`;
+  }).join('') || '<p class="note">완료한 세트가 없어요.</p>';
+  const tips = {};
+  S.sets.forEach(x => x.log.forEach(r => (r.faults || []).forEach(f => { const k = x.ex + ':' + f; tips[k] = tips[k] || { n: 0, text: x.cue[f] || f, ex: x.ex }; tips[k].n += 1; })));
+  const top = Object.values(tips).sort((a, b) => b.n - a.n).slice(0, 2);
+  $('dTips').innerHTML = top.length ? top.map((t, i) => `<div class="rep" style="flex-wrap:nowrap"><span class="n">${i + 1}</span><span class="d"><b>${t.text}</b><br><small>${EXERCISES[t.ex].name} · ${t.n}회 지적</small></span></div>`).join('') : (total ? '<p class="note">지적받은 자세가 없어요. 잘했어요!</p>' : '<p class="note">인식된 반복이 없어요. 휴대폰 위치를 확인해 보세요.</p>');
+  const rp = S.sets.map(x => x.rpe).filter(Boolean), easy = rp.filter(v => v === 'easy').length, hard = rp.filter(v => v === 'max').length;
+  $('dNext').textContent = easy > rp.length / 2 ? '대부분 쉬웠어요. 다음 운동은 종목당 횟수를 2회씩 늘려요.' : hard ? '한계였던 세트가 있었어요. 다음 운동은 그 종목 횟수를 줄여요.' : '강도가 적당했어요. 다음 운동도 같은 구성으로 해요.';
+  show('done'); say('오늘 운동 끝! 수고했어요.', true);
+}
+$('dHome').onclick = () => { session = null; show('intro'); $('startBtn').disabled = false; applyFlow(); };
+$('dCopy').onclick = async () => {
+  const S = session; if (!S) return;
+  const lines = [`오늘의 운동 데모 v28 결과 [${mode}·푸시업 ${({ full: '기본', knees: '무릎', incline: '의자' })[pstyle]}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
+  for (const x of S.sets) {
+    lines.push(`■ ${EXERCISES[x.ex].name} ${x.set}/${x.of}세트 (목표 ${x.target}회, 체감 ${x.rpe ? RPE[x.rpe][0] : '-'})`);
+    x.log.forEach(r => lines.push(`${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EXERCISES[x.ex].line(r)}`));
+  }
+  try { await navigator.clipboard.writeText(lines.join('\n')); $('dCopy').textContent = '복사했어요'; } catch { $('dCopy').textContent = '복사하지 못했어요'; }
+  setTimeout(() => $('dCopy').textContent = '결과 복사하기', 2000);
+};
+window.__session = { get: () => session, finish: finishSession, endTimer: () => { if (tm) { tm.k = tm.it.steps.length; tm.left = 0; } } };
+applyFlow();
+
 if ('speechSynthesis' in window) speechSynthesis.getVoices();
 </script>
 </body>
