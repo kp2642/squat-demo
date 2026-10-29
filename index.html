@@ -67,7 +67,7 @@ label.lbl{font-size:14px;font-weight:600}
 <body>
 
 <section id="intro" class="screen on">
-  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v15</small></h1>
+  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v16</small></h1>
   <div>
     <label class="lbl">종목</label>
     <div class="seg" id="exercise" style="grid-template-columns:1fr 1fr">
@@ -152,8 +152,8 @@ label.lbl{font-size:14px;font-weight:600}
 </section>
 
 <script type="module">
-import * as SQ from './squat-logic.js?v=15';
-import * as PU from './pushup-logic.js?v=15';
+import * as SQ from './squat-logic.js?v=16';
+import * as PU from './pushup-logic.js?v=16';
 
 // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식
 const EXERCISES = {
@@ -292,7 +292,9 @@ async function start() {
     $('startBtn').disabled = false; $('startBtn').textContent = '시작하기';
     return;
   }
-  counter = new (EX().Counter)(mode); CUE_TEXT = EX().lib.CUE_TEXT; NOREP_TEXT = EX().lib.NOREP_TEXT; results = []; rot.k = -1; rot.n = 0;
+  counter = new (EX().Counter)(mode); CUE_TEXT = EX().lib.CUE_TEXT; NOREP_TEXT = EX().lib.NOREP_TEXT;
+  // 무릎 푸시업은 엉덩이가 뒤로 빠지기 쉬워서, 솟음 지적을 무릎 기준으로 말해줌
+  if (exercise === 'pushup' && pstyle === 'knees') { CUE_TEXT = { ...CUE_TEXT, pike: '엉덩이를 앞으로 밀어 무릎부터 어깨까지 일직선으로' }; NOREP_TEXT = { ...NOREP_TEXT, pike: '엉덩이가 뒤로 빠져서 이번은 세지 않아요' }; } results = []; rot.k = -1; rot.n = 0;
   $('count').innerHTML = `0<small> / ${target}</small>`;
   setStatus(ultraMissing ? '초광각 카메라를 찾지 못해 일반 뒷면 카메라로 시작해요' : EX().startStatus, ultraMissing);
   if (ultraMissing) say('초광각 카메라를 찾지 못해 일반 뒷면 카메라로 시작해요');
@@ -539,7 +541,7 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EX().line(r)} / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `${EX().name} 데모 v15 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `${EX().name} 데모 v16 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
