@@ -1,5 +1,5 @@
 import { attribute, chooseTouch, TRACKED_TAGS, type Touch } from './attribution';
-import { encrypt, ipHash, phoneHash } from './crypto';
+import { encrypt, ipHash, nameHash, phoneHash } from './crypto';
 import { maskPhone, phoneDigits } from './phone';
 import { rpc } from './server-db';
 
@@ -78,6 +78,7 @@ export async function collect(payload: CollectPayload, origin: { host: string; i
         p_ip_hash: ipHash(origin.ip),
         p_lead: {
           name_enc: name ? encrypt(name) : null,
+          name_hash: name ? nameHash(name) : null,
           phone_enc: digits ? encrypt(phoneRaw) : null,
           phone_hash: digits ? phoneHash(digits) : null,
           phone_masked: digits ? maskPhone(digits) : null,

@@ -112,3 +112,11 @@ export async function removeMember(form: FormData) {
   if (error || !count) back(PAGE, { error: error ? errorMessage(error) : '삭제하지 못했어요' });
   done('사용자를 삭제했어요');
 }
+
+export async function updateCoupons(form: FormData) {
+  const { supabase } = await requireAdmin();
+  const codes = [...new Set(str(form, 'coupon_codes').split(',').map((c) => c.trim()).filter(Boolean))].slice(0, 20);
+  const { error } = await supabase.from('channels').update({ coupon_codes: codes }).eq('id', str(form, 'id'));
+  if (error) back(PAGE, { error: errorMessage(error) });
+  done('쿠폰·암호 문구를 저장했어요');
+}

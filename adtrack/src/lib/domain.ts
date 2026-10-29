@@ -24,6 +24,8 @@ export function isValidDomain(d: string): boolean {
 }
 
 export function parseAmount(input: string): number | null {
-  const n = Number(input.replace(/[,\s원]/g, ''));
+  const cleaned = input.replace(/[,\s원]/g, '');
+  if (!cleaned) return null;
+  const n = Number(cleaned);
   return Number.isSafeInteger(n) && n >= 0 ? n : null;
 }

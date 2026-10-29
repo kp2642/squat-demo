@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { TEST_AUTH_COOKIE, testAuthEnabled } from './lib/test-auth';
 
 // 요청마다 Supabase 세션 쿠키를 갱신하고, 로그인하지 않은 사용자를 로그인 화면으로 보낸다.
 export async function proxy(request: NextRequest) {
@@ -18,6 +19,9 @@ export async function proxy(request: NextRequest) {
       },
     },
   );
+
+  // 브라우저 테스트 로그인(서명 확인은 화면에서)
+  if (testAuthEnabled() && request.cookies.has(TEST_AUTH_COOKIE)) return response;
 
   const { data: { user } } = await supabase.auth.getUser();
   const path = request.nextUrl.pathname;

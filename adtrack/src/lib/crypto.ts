@@ -39,6 +39,11 @@ export function phoneHash(digits: string): string {
   return createHmac('sha256', getKeys().mac).update(digits).digest('base64url');
 }
 
+// 이름 검색용. 공백을 빼고 비교하므로 '김 민수' 와 '김민수' 는 같다.
+export function nameHash(name: string): string {
+  return createHmac('sha256', getKeys().mac).update(`name:${name.replace(/\s+/g, '').toLowerCase()}`).digest('base64url');
+}
+
 export function ipHash(ip: string): string {
   return createHmac('sha256', getKeys().mac).update(`ip:${ip}`).digest('base64url').slice(0, 22);
 }

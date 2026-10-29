@@ -78,3 +78,36 @@ code { font-size: 13px; word-break: break-all; }
 .progress > div { height: 100%; background: var(--ok); }
 .snippet { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; margin: 0 0 8px; }
 .snippet code { white-space: pre-wrap; }
+
+/* 문의함 */
+.small { font-size: 13px; }
+.lead-card { display: grid; gap: 6px; padding: 14px; margin-bottom: 12px; }
+.lead-card[aria-busy='true'] { opacity: 0.6; }
+.lead-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.lead-head strong { font-size: 16px; }
+.status { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--line); }
+.status-new { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.status-contracted { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.status-failed { color: var(--muted); }
+.phone summary { cursor: pointer; width: fit-content; }
+.phone a { display: inline-block; padding: 6px 0; }
+.amount { font-weight: 700; color: var(--ok); }
+.status-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 4px; }
+.status-buttons button, .chips button { min-height: 44px; padding: 8px 6px; }
+.status-buttons button[aria-pressed='true'] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.panel input { min-height: 44px; }
+.panel button { min-height: 44px; }
+.chips { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.filters input { grid-column: 1 / -1; }
+.status-tabs { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 12px; }
+.status-tabs a { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); text-decoration: none; color: var(--text); white-space: nowrap; font-size: 14px; }
+.status-tabs a.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+.page-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tab-badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; margin: 0; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; word-break: break-all; }
+.button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
+label.chip { display: flex; align-items: center; gap: 6px; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-weight: 500; min-height: 44px; }
+label.chip input { width: auto; }

@@ -10,6 +10,7 @@ create table public.leads (
   site_id uuid references public.sites (id) on delete set null,
   -- 이름·연락처는 서버에서 암호화한 값만 저장한다 (src/lib/crypto.ts)
   name_enc text,
+  name_hash text,                       -- 이름 검색용 (공백 뺀 이름의 HMAC, 정확히 같은 이름만 찾음)
   phone_enc text,
   phone_hash text,                      -- 같은 연락처 찾기용 (사업장별 HMAC)
   phone_masked text,                    -- 화면 표시용 '010-****-5678'
@@ -20,7 +21,8 @@ create table public.leads (
   campaign text,
   ad_group text,
   ad_content text,
-  attribution text not null check (attribution in ('auto', 'asked', 'manual', 'unknown')),
+  -- 판별 방식: auto 추적 코드 · coupon 쿠폰 문구 · asked 고객 응답 · manual 직원 직접 선택 · unknown 출처 미확인
+  attribution text not null check (attribution in ('auto', 'coupon', 'asked', 'manual', 'unknown')),
   asked_channel_id uuid references public.channels (id) on delete set null,
   coupon_code text,
   evidence text,                        -- 판별 근거 (예: n_keyword=이혼전문변호사)
@@ -167,7 +169,7 @@ begin
 end $$;
 
 -- 문의 한 건 저장. 같은 연락처가 있으면 새 문의 대신 다시 연락 기록을 남기고 출처는 첫 문의 것을 유지한다.
--- p_lead: name_enc, phone_enc, phone_hash, phone_masked, inquiry_type,
+-- p_lead: name_enc, name_hash, phone_enc, phone_hash, phone_masked, inquiry_type,
 --         source{code, utm_source, keyword, campaign, ad_group, ad_content, evidence}, first_touch, last_touch
 create function public.collect_lead(
   p_tracking_key text, p_host text, p_visitor_id text, p_ip_hash text, p_lead jsonb
@@ -209,11 +211,11 @@ begin
 
   if v_lead is null then
     insert into public.leads (
-      workspace_id, site_id, name_enc, phone_enc, phone_hash, phone_masked, inquiry_type, method,
+      workspace_id, site_id, name_enc, name_hash, phone_enc, phone_hash, phone_masked, inquiry_type, method,
       channel_id, keyword, campaign, ad_group, ad_content, attribution, evidence, first_touch, last_touch
     ) values (
       v_site.workspace_id, v_site.site_id,
-      nullif(p_lead ->> 'name_enc', ''), nullif(p_lead ->> 'phone_enc', ''),
+      nullif(p_lead ->> 'name_enc', ''), nullif(p_lead ->> 'name_hash', ''), nullif(p_lead ->> 'phone_enc', ''),
       nullif(p_lead ->> 'phone_hash', ''), nullif(p_lead ->> 'phone_masked', ''),
       v_type, 'form', v_channel,
       left(v_src ->> 'keyword', 200), left(v_src ->> 'campaign', 200),

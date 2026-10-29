@@ -4,12 +4,12 @@
 // scripts/test-e2e.sh 가 마이그레이션을 적용한 DB 와 함께 실행한다. 먼저 npm run build 가 필요하다.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import pg from 'pg';
 import { chromium } from 'playwright';
 import { startSites } from './sites.mjs';
+import { startApp, waitFor } from './app.mjs';
 
 process.env.LEAD_ENCRYPTION_KEY ??= Buffer.alloc(32, 3).toString('base64');
 const { decrypt, phoneHash } = await import('../../src/lib/crypto.ts');
@@ -38,15 +38,6 @@ const CASES = [
   { name: '7 직접 방문', code: 'direct', evidence: '꼬리표·유입 주소 없음' },
 ];
 
-async function waitFor(fn, what, timeout = 8000) {
-  const end = Date.now() + timeout;
-  for (;;) {
-    const v = await fn();
-    if (v) return v;
-    if (Date.now() > end) throw new Error(`${what} 을(를) 기다리다 시간 초과`);
-    await sleep(100);
-  }
-}
 
 const leadWithChannel = (where, params) => db.query(`
   select l.*, c.code as channel_code from public.leads l left join public.channels c on c.id = l.channel_id
@@ -120,19 +111,8 @@ before(async () => {
     siteIds[r.domain.split('.')[0]] = r.id;
   }
 
-  app = spawn('node_modules/.bin/next', ['start', '-p', String(APP_PORT)], {
-    detached: true, // 끝날 때 next-server 자식 프로세스까지 한꺼번에 끄기 위해
-    env: {
-      ...process.env,
-      NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:9',
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'e2e',
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  let appLog = '';
-  app.stdout.on('data', (b) => { appLog += b; });
-  app.stderr.on('data', (b) => { appLog += b; });
-  await waitFor(() => fetch(`${APP}/t/${key}.js`).then((r) => r.ok).catch(() => false), `서비스 시작\n${appLog}`, 60000);
+  app = await startApp(APP_PORT);
+  await waitFor(() => fetch(`${APP}/t/${key}.js`).then((r) => r.ok).catch(() => false), '추적 코드');
 
   sites = await startSites(SITE_PORT, `${APP}/t/${key}.js`);
   browser = await chromium.launch({ args: ['--host-resolver-rules=MAP *.adtrack.test 127.0.0.1'] });
@@ -141,7 +121,7 @@ before(async () => {
 after(async () => {
   await browser?.close();
   sites?.close();
-  if (app) process.kill(-app.pid);
+  app?.stop();
   await db.end();
 });
 

@@ -4,7 +4,7 @@ import { siteOrigin } from '@/lib/origin';
 import { Messages } from '../../messages';
 import { CopyButton } from '../copy-button';
 import {
-  addInquiryType, addSite, cancelInvite, inviteMember, removeInquiryType, removeMember, removeSite, updateThankYou,
+  addInquiryType, addSite, cancelInvite, inviteMember, removeInquiryType, removeMember, removeSite, updateCoupons, updateThankYou,
   updateWorkspace,
 } from './actions';
 
@@ -13,10 +13,11 @@ type Props = { searchParams: Promise<Record<string, string | undefined>> };
 export default async function SetupPage({ searchParams }: Props) {
   const { error, notice } = await searchParams;
   const { supabase, member, workspace } = await requireAdmin();
-  const [presets, sites, types, members, invites, origin] = await Promise.all([
+  const [presets, sites, types, channels, members, invites, origin] = await Promise.all([
     loadPresets(supabase),
     supabase.from('sites').select('id, domain, verified_at').order('created_at').then((r) => r.data ?? []),
     supabase.from('inquiry_types').select('id, name').order('position').then((r) => r.data ?? []),
+    supabase.from('channels').select('id, name, coupon_codes').eq('hidden', false).order('position').then((r) => r.data ?? []),
     supabase.from('users').select('id, email, name, role').order('created_at').then((r) => r.data ?? []),
     supabase
       .from('invitations')
@@ -146,6 +147,25 @@ export default async function SetupPage({ searchParams }: Props) {
           <input name="name" placeholder="새 상담 유형" aria-label="새 상담 유형" maxLength={30} required />
           <button>추가</button>
         </form>
+      </section>
+
+      <section className="card">
+        <h2>쿠폰·암호 문구</h2>
+        <p className="muted small">
+          블로그·인스타·전단지에 문구를 적어 두고, 직원이 문의를 직접 등록할 때 문구를 입력하면 그 채널이 자동으로 골라져요. 여러 개는 쉼표로.
+        </p>
+        <ul className="list">
+          {channels.map((c) => (
+            <li key={c.id}>
+              <form action={updateCoupons} className="row" style={{ width: '100%' }}>
+                <input type="hidden" name="id" value={c.id} />
+                <span style={{ minWidth: 96 }}>{c.name}</span>
+                <input name="coupon_codes" defaultValue={(c.coupon_codes as string[]).join(', ')} placeholder="예: 블로그 보고 왔어요, BLOG10" aria-label={`${c.name} 쿠폰 문구`} />
+                <button className="secondary">저장</button>
+              </form>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="card">

@@ -64,6 +64,8 @@ before(async () => {
     await db.query('select public.collect_lead($1, $2, $3, $4, $5)', [key, host, 'v1', 'ip1', lead]);
     await db.query('select public.collect_lead($1, $2, $3, $4, $5)', [key, host, 'v2', 'ip1', lead]);
     await db.query('select public.collect_visit($1, $2, $3, $4, $5, $6)', [key, host, 'v1', { gclid: 'g' }, null, '/']);
+    // 변경 기록도 남긴다
+    await rows(owner, "select public.update_lead_status(id, 'consulting') from public.leads");
   }
 });
 

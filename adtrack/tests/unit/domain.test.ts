@@ -20,4 +20,6 @@ test('금액 입력', () => {
   assert.equal(parseAmount('0'), 0);
   assert.equal(parseAmount('-1'), null);
   assert.equal(parseAmount('abc'), null);
+  assert.equal(parseAmount(''), null);
+  assert.equal(parseAmount(' 원 '), null);
 });
