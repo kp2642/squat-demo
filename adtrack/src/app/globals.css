@@ -123,3 +123,40 @@ label.chip input { width: auto; }
 .table .num { text-align: right; white-space: nowrap; }
 .channel-edit { border-bottom: 1px solid var(--line); padding: 10px 0; }
 .channel-edit summary { cursor: pointer; }
+
+/* 성과 */
+.period-form { margin-bottom: 8px; flex-wrap: wrap; }
+.period-form input { flex: 1 1 130px; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+@media (min-width: 640px) { .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.tile { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; min-width: 0; }
+.tile-label { color: var(--muted); font-size: 13px; }
+.tile-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tile-sub { color: var(--muted); font-size: 12px; }
+.suggestion { font-weight: 600; }
+.perf-table { font-variant-numeric: tabular-nums; }
+.perf-table th[scope='row'] { color: var(--text); font-weight: 600; white-space: nowrap; }
+.perf-table td, .perf-table th { white-space: nowrap; }
+.roas-cell { position: relative; min-width: 110px; }
+.roas-bar { position: absolute; left: 6px; top: 50%; height: 8px; margin-top: -4px; max-width: calc(100% - 56px); border-radius: 0 4px 4px 0; background: var(--accent); opacity: 0.85; }
+.roas-cell .num { position: relative; float: right; }
+.verdict { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.verdict-good { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.verdict-warn { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+.verdict-neutral { color: var(--text); }
+.verdict-free { color: var(--muted); }
+.narrow-only { display: none; }
+@media (max-width: 639px) {
+  .wide-only { display: none; }
+  .narrow-only { display: block; }
+}
+.perf-cards { list-style: none; padding: 0; margin: 0; }
+.perf-cards li { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.perf-cards li:last-child { border-bottom: 0; }
+.perf-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.perf-card-roas { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.roas-track { flex: 1; height: 8px; }
+.roas-bar-inline { display: block; height: 8px; border-radius: 0 4px 4px 0; background: var(--accent); opacity: 0.85; }
+.perf-card-grid { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+.perf-card-grid dt { color: var(--muted); }
+.perf-card-grid dd { margin: 0; text-align: right; }
