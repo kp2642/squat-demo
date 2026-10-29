@@ -19,6 +19,7 @@ export const THRESHOLDS = {
   edgeMargin: 0.02,
   sideMaxSpread: 0.5,   // 양 어깨 거리 / 몸통 길이가 이보다 크면 정면(머리 쪽)에서 본 것
   plankTilt: 40,        // 어깨-발(무릎) 선이 수평에서 이 각도 이내여야 엎드린 자세로 봄
+  kneesTilt: 55,        // v15: 무릎 푸시업은 어깨-무릎 선이 30~45° 기울어 있어 40°로는 준비 자세가 안 잡혔음
   inclineTilt: 60,      // v13: 의자·소파를 짚는 인클라인 푸시업은 몸이 더 기울어 있으므로 60°까지
   weakVisibility: 0.35, // v13: 운동 중에는 이 정도로 흐릿해도 계속 추적 (바닥 근처에서 손목·발목이 잘 가려짐)
   plankOffMs: 1500,     // v13: 엎드린 자세가 이만큼 계속 풀려야 쉬는 것으로 봄 (순간 오인식으로 끊기던 문제)
@@ -70,7 +71,8 @@ export function measure(lm, aspect = 1, style = 'full') {
   const j = Object.fromEntries(JOINTS.map((k) => [k, P(side[k])]));
   const t = THRESHOLDS;
   const minVis = Math.min(...need.map((k) => j[k].v));
-  const inFrame = need.every((k) => j[k].rx > t.edgeMargin && j[k].rx < 1 - t.edgeMargin && j[k].y > t.edgeMargin && j[k].y < 1 - t.edgeMargin);
+  // v15: 휴대폰을 바닥에 두면 손목·발목이 화면 아래 끝에 걸리기 쉬워서, 아래쪽은 살짝 벗어나도 받아들임
+  const inFrame = need.every((k) => j[k].rx > 0 && j[k].rx < 1 && j[k].y > 0 && j[k].y < 1.03);
   if (minVis < t.weakVisibility || !inFrame) return { visible: false, reason: 'not_in_frame' };
   const weak = minVis < t.minVisibility; // 운동 중에만 받아들임
 
@@ -90,7 +92,7 @@ export function measure(lm, aspect = 1, style = 'full') {
     sideView: spread < t.sideMaxSpread,
     spread,
     weak,
-    plank: fromHorizontal(j.shoulder, anchor) < (style === 'incline' ? t.inclineTilt : t.plankTilt),
+    plank: fromHorizontal(j.shoulder, anchor) < (style === 'incline' ? t.inclineTilt : knees ? t.kneesTilt : t.plankTilt),
     elbow: angle(j.shoulder, j.elbow, j.wrist),
     hipDev,
     shoulderY: j.shoulder.y,
