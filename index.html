@@ -84,7 +84,7 @@ label.lbl{font-size:14px;font-weight:600}
 <body>
 
 <section id="intro" class="screen on">
-  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v28</small></h1>
+  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v29</small></h1>
   <div class="seg" id="flow" style="grid-template-columns:1fr 1fr">
     <button data-v="single" class="sel">종목 하나 테스트</button><button data-v="session">오늘의 운동 (세션)</button>
   </div>
@@ -139,6 +139,14 @@ label.lbl{font-size:14px;font-weight:600}
       <button data-v="user" class="sel">앞면</button><button data-v="environment">뒷면</button><button data-v="ultra">뒷면 초광각</button>
     </div>
     <p class="note" style="margin:6px 0 0">휴대폰은 세로든 가로든 괜찮아요. 공간이 좁으면 가로로 두거나 초광각을 쓰면 더 가까이 둘 수 있어요(초광각은 아이폰 11 이상).</p>
+  </div>
+  <div>
+    <label class="lbl">음성</label>
+    <div style="display:flex;gap:6px">
+      <select id="voiceSel" style="flex:1;min-width:0;height:44px;border:1px solid #D6D6D6;border-radius:10px;background:#fff;font-size:15px;padding:0 10px;color:var(--ink)"></select>
+      <button id="voiceTest" style="height:44px;border:1px solid #D6D6D6;border-radius:10px;background:#fff;font-size:15px;padding:0 14px;color:var(--ink)">들어보기</button>
+    </div>
+    <p class="note" style="margin:6px 0 0">더 자연스러운 목소리를 쓰려면 아이폰 설정 &gt; 손쉬운 사용 &gt; 읽기 및 말하기 &gt; 음성 &gt; 한국어에서 '고품질' 음성을 내려받은 뒤 이 화면을 새로고침하세요. ★ 표시가 고품질이에요.</p>
   </div>
   <p class="note">통증이 느껴지면 바로 멈추세요. 이 데모는 의료·재활 목적이 아니에요. 처음 사용할 때 카메라 권한을 허용해 주세요.</p>
   <div id="err"></div>
@@ -239,9 +247,9 @@ label.lbl{font-size:14px;font-weight:600}
 </section>
 
 <script type="module">
-import * as SQ from './squat-logic.js?v=28';
-import * as PU from './pushup-logic.js?v=28';
-import * as GM from './goodmorning-logic.js?v=28';
+import * as SQ from './squat-logic.js?v=29';
+import * as PU from './pushup-logic.js?v=29';
+import * as GM from './goodmorning-logic.js?v=29';
 
 // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식
 const EXERCISES = {
@@ -361,7 +369,11 @@ applyExercise();
 
 // 음성 (iOS는 사용자 터치 후에만 소리가 나므로 시작 버튼에서 한 번 깨워둠)
 const NUM = ['','하나','둘','셋','넷','다섯','여섯','일곱','여덟','아홉','열','열하나','열둘','열셋','열넷','열다섯','열여섯','열일곱','열여덟','열아홉','스물'];
-function koVoice() { return speechSynthesis.getVoices().find(v => v.lang && v.lang.startsWith('ko')); }
+// v29: 한국어 음성 고르기. 고품질(Premium/Enhanced)을 먼저, 고른 음성은 기억
+let voicePick = ''; try { voicePick = localStorage.getItem('voiceURI') || ''; } catch {}
+const voiceRank = (v) => /premium|프리미엄/i.test(v.name) ? 0 : /enhanced|고품질|향상/i.test(v.name) ? 1 : 2;
+function koVoices() { return ('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(v => v.lang && /^ko/i.test(v.lang)).sort((a, b) => voiceRank(a) - voiceRank(b)); }
+function koVoice() { const vs = koVoices(); return vs.find(v => v.voiceURI === voicePick) || vs[0]; }
 function say(text, interrupt = false) {
   if (!voice || !('speechSynthesis' in window)) return;
   if (interrupt) speechSynthesis.cancel();
@@ -689,7 +701,7 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EX().line(r)} / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `${EX().name} 데모 v28 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `${EX().name} 데모 v29 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
@@ -878,7 +890,7 @@ function finishSession() {
 $('dHome').onclick = () => { session = null; show('intro'); $('startBtn').disabled = false; applyFlow(); };
 $('dCopy').onclick = async () => {
   const S = session; if (!S) return;
-  const lines = [`오늘의 운동 데모 v28 결과 [${mode}·푸시업 ${({ full: '기본', knees: '무릎', incline: '의자' })[pstyle]}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
+  const lines = [`오늘의 운동 데모 v29 결과 [${mode}·푸시업 ${({ full: '기본', knees: '무릎', incline: '의자' })[pstyle]}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
   for (const x of S.sets) {
     lines.push(`■ ${EXERCISES[x.ex].name} ${x.set}/${x.of}세트 (목표 ${x.target}회, 체감 ${x.rpe ? RPE[x.rpe][0] : '-'})`);
     x.log.forEach(r => lines.push(`${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EXERCISES[x.ex].line(r)}`));
@@ -889,7 +901,17 @@ $('dCopy').onclick = async () => {
 window.__session = { get: () => session, finish: finishSession, endTimer: () => { if (tm) { tm.k = tm.it.steps.length; tm.left = 0; } } };
 applyFlow();
 
-if ('speechSynthesis' in window) speechSynthesis.getVoices();
+function fillVoices() {
+  const sel = $('voiceSel'), vs = koVoices(), cur = koVoice();
+  sel.innerHTML = '';
+  if (!vs.length) { const o = document.createElement('option'); o.textContent = '기본 음성'; sel.append(o); return; }
+  vs.forEach(v => { const o = document.createElement('option'); o.value = v.voiceURI; o.textContent = v.name + (voiceRank(v) < 2 ? ' ★' : ''); sel.append(o); });
+  if (cur) sel.value = cur.voiceURI;
+}
+$('voiceSel').onchange = () => { voicePick = $('voiceSel').value; try { localStorage.setItem('voiceURI', voicePick); } catch {} $('voiceTest').click(); };
+$('voiceTest').onclick = () => { const was = voice; voice = true; say('좋아요, 세 번. 무릎이 안으로 모이지 않게 바깥으로 밀어 주세요.', true); voice = was; };
+if ('speechSynthesis' in window) { speechSynthesis.getVoices(); speechSynthesis.addEventListener('voiceschanged', fillVoices); }
+fillVoices();
 </script>
 </body>
 </html>
