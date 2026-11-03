@@ -246,7 +246,7 @@ const MOVES = {
   legswing(t) {
     const sw = Math.sin(2 * Math.PI * t / 1.4), legs = { [side]: [12 + 45 * sw, 14 - 10 * sw, 10 * sw], [other(side)]: [0, 0] };
     const J = standing({ legs, lean: 2 - 4 * sw });
-    onWall(J, other(side), V(0.06, 1.18, zs(other(side), 0.47))); handOnHip(J, side); J.wallZ = zs(other(side), 0.5); // 벽은 옆에, 벽 쪽 손으로 짚고 바깥 다리를 앞뒤로
+    onWall(J, other(side), V(-0.12, 1.15, zs(other(side), 0.47))); handOnHip(J, side); J.wallZ = zs(other(side), 0.5); J.wallX = -0.12; // 벽은 옆에, 벽 쪽 손으로 짚고 바깥 다리를 앞뒤로
     J.hl = LEG_KEYS(side);
     return J;
   },
@@ -311,6 +311,7 @@ const MOVES = {
     return J;
   },
   kneehug(t) {
+    const zs = (s, w) => (s === 'L' ? w : -w); // 등을 대고 누워 머리가 +x면 오른쪽이 -z (서 있을 때와 반대)
     const p = cyc(t), J = {}, P = V(0, 0.12, 0), C = V(LEN.torso, 0.13, 0);
     J.pelvis = P; J.chest = C;
     head(J, C.clone().add(V(0.05, 0, 0)), V(1, 0.12 + 0.15 * p, 0).normalize());
@@ -319,7 +320,7 @@ const MOVES = {
     const ph = lerp(178, 58, p) * D, H = V(0, 0.12, zh), K = H.clone().add(V(Math.cos(ph) * LEN.thigh, Math.max(-0.03, Math.sin(ph) * LEN.thigh), 0));
     const sd = ph + lerp(0, 145, p) * D, A = K.clone().add(V(Math.cos(sd) * LEN.shin, Math.sin(sd) * LEN.shin, 0));
     A.y = Math.max(0.07, A.y);
-    const toeDir = V(Math.cos(sd + Math.PI / 2), Math.sin(sd + Math.PI / 2), 0);
+    const toeDir = V(Math.cos(sd - Math.PI / 2), Math.sin(sd - Math.PI / 2), 0); // 발끝은 천장 쪽
     Object.assign(J, { [side + 'hip']: H, [side + 'knee']: K, [side + 'ankle']: A, [side + 'heel']: A.clone().add(toeDir.clone().multiplyScalar(-0.05)), [side + 'toe']: A.clone().add(toeDir.clone().multiplyScalar(0.16)) });
     const grip = K.clone().add(V(Math.cos(sd) * 0.09, Math.sin(sd) * 0.09, 0));
     for (const s of ['L', 'R']) {
@@ -332,6 +333,7 @@ const MOVES = {
   },
 };
 const FLOOR_MOVES = ['catcow', 'child', 'kneehug'];
+const FRONT_WALL = ['quad', 'wallpush']; // 앞에 벽이 있는 동작은 벽이 몸을 가리지 않게 살짝 뒤쪽에서 봄
 
 // 동작 시간(초): 시작 정지 → 내려가기 → 바닥 정지 → 올라오기
 const TIMING = { squat: [0.6, 2.0, 0.4, 1.4], goodmorning: [0.6, 2.2, 0.4, 1.5], pushup: [0.6, 1.6, 0.3, 1.1] };
@@ -394,10 +396,10 @@ const hlMat = new THREE.MeshStandardMaterial({ color: 0x5B8CFF, roughness: 0.5 }
 function pose(J) {
   if (!J.spine) J.spine = J.pelvis.clone().add(J.chest).multiplyScalar(0.5);
   wall.visible = J.wallX != null || J.wallZ != null;
-  if (J.wallZ != null) { // 옆 벽: 카메라 쪽에 있으면 몸이 보이도록 반투명
-    wall.rotation.y = Math.PI / 2; wall.position.set(0, 1.1, J.wallZ + Math.sign(J.wallZ) * 0.03);
-    const near = J.wallZ > 0; wall.material.transparent = near; wall.material.opacity = near ? 0.3 : 1; wall.material.depthWrite = !near;
-  } else if (wall.visible) { wall.rotation.y = 0; wall.position.set(J.wallX + 0.03, 1.1, 0); wall.material.transparent = false; wall.material.opacity = 1; wall.material.depthWrite = true; }
+  if (J.wallZ != null) { // 옆 벽: 손 짚는 곳만 좁은 기둥으로, 카메라 쪽이면 반투명 (몸을 가리지 않게)
+    wall.rotation.y = Math.PI / 2; wall.scale.set(1, 1, 0.16); wall.position.set(J.wallX || 0, 1.1, J.wallZ + Math.sign(J.wallZ) * 0.03);
+    const near = J.wallZ > 0; wall.material.transparent = near; wall.material.opacity = near ? 0.25 : 1; wall.material.depthWrite = !near;
+  } else if (wall.visible) { wall.rotation.y = 0; wall.scale.set(1, 1, 1); wall.position.set(J.wallX + 0.03, 1.1, 0); wall.material.transparent = false; wall.material.opacity = 1; wall.material.depthWrite = true; }
   for (const { a, b, m } of parts) { place(m, J[a], J[b]); m.material = J.hl && J.hl.includes(a) ? hlMat : skin; } // 움직이는 쪽 다리를 파랗게
   for (const { k, m } of jointMeshes) { m.position.copy(J[k]); m.scale.setScalar(JR[k.slice(1)]); }
   headMesh.position.copy(J.head);
@@ -413,7 +415,7 @@ function pose(J) {
 const FOCUS = { squat: [V(0.05, 0.82, 0), 4.3], goodmorning: [V(0.05, 0.82, 0), 4.3], pushup: [V(-0.6, 0.3, 0), 3.6] };
 const VIEWS = { side: [0, 6], angle: [38, 14], front: [90, 8] };
 let az = 0, el = 6;
-function setView(v) { view = v; [az, el] = VIEWS[v]; if (ex === 'pushup' && v === 'front') { az = 25; el = 62; } if (MOVES[ex] && v === 'side') { az = FLOOR_MOVES.includes(ex) ? 24 : 28; el = FLOOR_MOVES.includes(ex) ? 16 : 9; } } // 왼쪽·오른쪽 모두 같은 방향에서 보여 줌
+function setView(v) { view = v; [az, el] = VIEWS[v]; if (ex === 'pushup' && v === 'front') { az = 25; el = 62; } if (MOVES[ex] && v === 'side') { az = FLOOR_MOVES.includes(ex) ? 24 : FRONT_WALL.includes(ex) ? -24 : 28; el = FLOOR_MOVES.includes(ex) ? 16 : 9; } } // 왼쪽·오른쪽 모두 같은 방향에서 보여 줌
 function placeCamera() {
   const [c, r] = FOCUS[ex] || (FLOOR_MOVES.includes(ex) ? [V(-0.15, 0.32, 0), 3.5] : ex === 'wallpush' ? [V(0.4, 0.85, 0), 4.4] : [V(0.12, 0.85, 0), 4.3]);
   const a = az * D, e = el * D;
