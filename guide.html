@@ -43,6 +43,7 @@ td:first-child{font-weight:600;width:34%}
 .embed header,.embed #ex,.embed #styleRow,.embed .ctl,.embed #tab,.embed #how,.embed #judge,.embed #hint{display:none!important}
 .embed .wrap{padding:0;max-width:none}
 .embed #stageBox{margin-top:0;border-radius:0}
+.nocap #caption{display:none}
 .embed #caption{margin-top:0;border-radius:0;font-size:13px;padding:6px 8px;min-height:0}
 </style>
 <script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed')</script>
@@ -78,7 +79,9 @@ td:first-child{font-weight:600;width:34%}
 const THREE = await import(window.THREE_URL || 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js');
 const $ = (id) => document.getElementById(id);
 const q = new URLSearchParams(location.search);
-let ex = ['squat', 'goodmorning', 'pushup'].includes(q.get('ex')) ? q.get('ex') : 'squat';
+let ex = q.get('ex') || 'squat';
+let side = q.get('side') === 'L' ? 'L' : 'R', back = q.get('dir') === 'back';
+if (q.get('nocap') === '1') document.documentElement.classList.add('nocap');
 let pstyle = q.get('style') === 'full' ? 'full' : 'knees';
 let view = 'side', speed = 1, playing = true;
 
@@ -178,6 +181,131 @@ const POSE = {
   },
 };
 
+// ── v32: 워밍업·쿨다운 동작 (t: 초, 계속 반복) ──
+const sn = (d) => Math.sin(d * D), cs = (d) => Math.cos(d * D);
+const wave = (t, per) => 0.5 - 0.5 * Math.cos(2 * Math.PI * t / per); // 0 → 1 → 0
+// 다리: 엉덩이 H에서 허벅지 a°(수직 아래 기준 앞으로 +), 무릎 굽힘 k°(+면 정강이가 뒤로), 발끝 f°(+면 위로)
+function leg(J, s, H, a, k, f = 0) {
+  const knee = H.clone().add(V(sn(a) * LEN.thigh, -cs(a) * LEN.thigh, 0)), g = a - k;
+  const ankle = knee.clone().add(V(sn(g) * LEN.shin, -cs(g) * LEN.shin, 0));
+  const fd = V(cs(g + f), sn(g + f), 0), sd = V(sn(g), -cs(g), 0);
+  Object.assign(J, { [s + 'hip']: H, [s + 'knee']: knee, [s + 'ankle']: ankle,
+    [s + 'heel']: ankle.clone().add(fd.clone().multiplyScalar(-0.06)).add(sd.clone().multiplyScalar(0.05)),
+    [s + 'toe']: ankle.clone().add(fd.clone().multiplyScalar(0.17)).add(sd.clone().multiplyScalar(0.06)) });
+}
+// 팔: 위팔 b°(수직 아래 기준 앞으로 +), 팔꿈치 굽힘 e°
+function arm(J, s, Sh, b, e) {
+  const el = Sh.clone().add(V(sn(b) * LEN.upper, -cs(b) * LEN.upper, 0)), h = b + e;
+  Object.assign(J, { [s + 'shoulder']: Sh, [s + 'elbow']: el, [s + 'wrist']: el.clone().add(V(sn(h) * LEN.fore, -cs(h) * LEN.fore, 0)) });
+}
+const zs = (s, w) => (s === 'L' ? -w : w);
+// 서 있는 자세: 낮은 쪽 발이 바닥에 닿게 골반 높이를 정함
+function standing({ legs, lean = 0, arms = {}, look = null }) {
+  const drop = ([a, k]) => cs(a) * LEN.thigh + cs(a - k) * LEN.shin;
+  const y = 0.08 + Math.max(drop(legs.L), drop(legs.R)), J = {};
+  for (const s of ['L', 'R']) leg(J, s, V(0, y, zs(s, 0.1)), ...legs[s]);
+  const P = V(0, y, 0), u = V(sn(lean), cs(lean), 0), C = P.clone().add(u.clone().multiplyScalar(LEN.torso));
+  J.pelvis = P; J.chest = C;
+  for (const s of ['L', 'R']) { const Sh = C.clone().add(V(0, 0, zs(s, 0.19))); if (arms[s]) arm(J, s, Sh, ...arms[s]); else J[s + 'shoulder'] = Sh; }
+  head(J, C.clone().add(u.clone().multiplyScalar(0.05)), look || u);
+  return J;
+}
+const other = (s) => (s === 'L' ? 'R' : 'L');
+function onWall(J, s, W) { // 손을 벽에 짚음
+  J[s + 'wrist'] = W; J[s + 'elbow'] = ik(J[s + 'shoulder'], W, LEN.upper, LEN.fore, V(-0.2, -1, zs(s, 0.6)));
+}
+function handOnHip(J, s) { J[s + 'wrist'] = J.pelvis.clone().add(V(0.08, 0.1, zs(s, 0.17))); J[s + 'elbow'] = ik(J[s + 'shoulder'], J[s + 'wrist'], LEN.upper, LEN.fore, V(-0.4, 0, zs(s, 1))); }
+function kneeling(J, hipX, hipY, kneeX) { // 무릎 꿇기: 정강이·발등이 바닥에
+  for (const s of ['L', 'R']) {
+    const z = zs(s, 0.1), knee = V(kneeX, 0.06, z), ankle = V(kneeX - LEN.shin, 0.06, z * 0.9);
+    Object.assign(J, { [s + 'hip']: V(hipX, hipY, z), [s + 'knee']: knee, [s + 'ankle']: ankle, [s + 'heel']: ankle.clone().add(V(0.02, 0.05, 0)), [s + 'toe']: ankle.clone().add(V(-0.15, -0.03, 0)) });
+  }
+}
+const MOVES = {
+  march(t, amp = 1, per = 1.1) {
+    const ph = 2 * Math.PI * t / per, r = Math.max(0, Math.sin(ph)), l = Math.max(0, -Math.sin(ph));
+    return standing({ legs: { R: [55 * r * amp, 75 * r * amp, 0], L: [55 * l * amp, 75 * l * amp, 0] }, lean: 3,
+      arms: { R: [-30 * Math.sin(ph) * amp, 70], L: [30 * Math.sin(ph) * amp, 70] } });
+  },
+  slowwalk(t) { return MOVES.march(t, 0.55, 1.8); },
+  armcircle(t) {
+    const b = ((back ? -1 : 1) * 180 * t) % 360;
+    return standing({ legs: { R: [0, 0], L: [0, 0] }, arms: { R: [b, 5], L: [b, 5] } });
+  },
+  legswing(t) {
+    const sw = Math.sin(2 * Math.PI * t / 1.6), legs = { [side]: [10 + 35 * sw, 12 - 6 * sw, 0], [other(side)]: [0, 0] };
+    const J = standing({ legs, lean: 2 });
+    onWall(J, other(side), V(0.62, 1.25, zs(other(side), 0.22))); handOnHip(J, side); J.wallX = 0.66;
+    return J;
+  },
+  hinge(t) { return POSE.goodmorning(0.6 * wave(t, 3.6)); },
+  halfsquat(t) { return POSE.squat(0.5 * wave(t, 3.4)); },
+  wallpush(t) {
+    const th = 18 + 12 * wave(t, 3), u = V(sn(th), cs(th), 0), J = {};
+    for (const s of ['L', 'R']) {
+      const z = zs(s, 0.1), ankle = V(0, 0.08, z);
+      Object.assign(J, { [s + 'ankle']: ankle, [s + 'knee']: ankle.clone().add(u.clone().multiplyScalar(LEN.shin)), [s + 'hip']: ankle.clone().add(u.clone().multiplyScalar(LEN.shin + LEN.thigh)), [s + 'heel']: ankle.clone().add(V(-0.06, -0.05, 0)), [s + 'toe']: ankle.clone().add(V(0.17, -0.06, 0)) });
+    }
+    J.pelvis = V(0, 0, 0).add(J.Lhip).add(J.Rhip).multiplyScalar(0.5); J.chest = J.pelvis.clone().add(u.clone().multiplyScalar(LEN.torso));
+    for (const s of ['L', 'R']) { J[s + 'shoulder'] = J.chest.clone().add(V(0, 0, zs(s, 0.19))); onWall(J, s, V(0.99, 1.33, zs(s, 0.24))); }
+    head(J, J.chest.clone().add(u.clone().multiplyScalar(0.05)), u); J.wallX = 1.02;
+    return J;
+  },
+  catcow(t) {
+    const c = Math.sin(2 * Math.PI * t / 5), J = {}; // c > 0: 고양이(등을 둥글게), c < 0: 소(등을 아래로)
+    const Sh = V(0, 0.605, 0), hipY = 0.5, hipX = -Math.sqrt(LEN.torso ** 2 - (Sh.y - hipY) ** 2);
+    kneeling(J, hipX, hipY, hipX);
+    J.pelvis = V(hipX, hipY, 0); J.chest = Sh;
+    const mid = J.pelvis.clone().add(Sh).multiplyScalar(0.5); J.spine = mid.add(V(0, 0.08 * c, 0));
+    for (const s of ['L', 'R']) { J[s + 'shoulder'] = Sh.clone().add(V(0, 0, zs(s, 0.19))); J[s + 'wrist'] = V(0.02, 0.04, zs(s, 0.2)); J[s + 'elbow'] = ik(J[s + 'shoulder'], J[s + 'wrist'], LEN.upper, LEN.fore, V(-1, 0, 0)); }
+    head(J, Sh.clone().add(V(0.05, 0, 0)), c > 0 ? V(0.45, -1, 0).normalize() : V(1, 0.15 - 0.6 * c, 0).normalize());
+    return J;
+  },
+  child(t) {
+    const w = wave(t, 5), J = {}, al = (28 - 4 * w) * D;
+    const hip = V(-Math.cos(al) * LEN.thigh, 0.06 + Math.sin(al) * LEN.thigh, 0);
+    kneeling(J, hip.x, hip.y, 0);
+    const g = (12 + 2 * w) * D, C = hip.clone().add(V(Math.cos(g) * LEN.torso, -Math.sin(g) * LEN.torso, 0));
+    J.pelvis = hip; J.chest = C;
+    for (const s of ['L', 'R']) { J[s + 'shoulder'] = C.clone().add(V(0, 0, zs(s, 0.19))); J[s + 'wrist'] = V(C.x + 0.54, 0.04, zs(s, 0.2)); J[s + 'elbow'] = ik(J[s + 'shoulder'], J[s + 'wrist'], LEN.upper, LEN.fore, V(0, 1, 0)); }
+    head(J, C.clone().add(V(0.07, 0.01, 0)), V(1, -0.45, 0).normalize());
+    return J;
+  },
+  quad(t) {
+    const w = wave(t, 4), J = standing({ legs: { [side]: [-8, 150 + 5 * w, 30], [other(side)]: [0, 0] }, lean: 5 });
+    const ank = J[side + 'ankle'];
+    J[side + 'wrist'] = ank.clone().add(V(-0.03, 0.03, 0)); J[side + 'elbow'] = ik(J[side + 'shoulder'], J[side + 'wrist'], LEN.upper, LEN.fore, V(0.2, -1, zs(side, 0.4)));
+    onWall(J, other(side), V(0.6, 1.25, zs(other(side), 0.22))); J.wallX = 0.64;
+    return J;
+  },
+  ham(t) {
+    const w = wave(t, 4), backDrop = cs(-10) * LEN.thigh + cs(-30) * LEN.shin, aF = Math.acos(Math.min(1, backDrop / (LEN.thigh + LEN.shin))) / D;
+    const J = standing({ legs: { [side]: [aF, 0, 35], [other(side)]: [-10, 20] }, lean: 38 + 6 * w });
+    const H = J[side + 'hip'], K = J[side + 'knee'];
+    for (const s of ['L', 'R']) { J[s + 'wrist'] = H.clone().lerp(K, 0.8).add(V(0.02, 0.07, zs(s, 0.07) - H.z)); J[s + 'elbow'] = ik(J[s + 'shoulder'], J[s + 'wrist'], LEN.upper, LEN.fore, V(0, 0, zs(s, 1))); }
+    return J;
+  },
+  chest(t) {
+    const w = wave(t, 4), J = standing({ legs: { R: [0, 0], L: [0, 0] }, lean: -4, arms: { R: [-35 - 12 * w, 0], L: [-35 - 12 * w, 0] } });
+    for (const s of ['L', 'R']) { J[s + 'wrist'].z = zs(s, 0.03); J[s + 'elbow'].z = zs(s, 0.13); }
+    return J;
+  },
+  kneehug(t) {
+    const w = wave(t, 4), J = {}, P = V(0, 0.12, 0), C = V(LEN.torso, 0.13, 0);
+    J.pelvis = P; J.chest = C;
+    head(J, C.clone().add(V(0.05, 0, 0)), V(1, 0.12, 0).normalize());
+    const o = other(side), zo = zs(o, 0.1), zh = zs(side, 0.1);
+    Object.assign(J, { [o + 'hip']: V(0, 0.12, zo), [o + 'knee']: V(-0.44, 0.09, zo), [o + 'ankle']: V(-0.88, 0.07, zo), [o + 'heel']: V(-0.93, 0.04, zo), [o + 'toe']: V(-0.9, 0.23, zo) });
+    const ph = (55 + 10 * w) * D, H = V(0, 0.12, zh), K = H.clone().add(V(Math.cos(ph) * LEN.thigh, Math.sin(ph) * LEN.thigh, 0));
+    const sd = ph + 145 * D, A = K.clone().add(V(Math.cos(sd) * LEN.shin, Math.sin(sd) * LEN.shin, 0));
+    Object.assign(J, { [side + 'hip']: H, [side + 'knee']: K, [side + 'ankle']: A, [side + 'heel']: A.clone().add(V(-0.05, 0.02, 0)), [side + 'toe']: A.clone().add(V(0.08, -0.14, 0)) });
+    const grip = K.clone().add(V(Math.cos(sd) * 0.09, Math.sin(sd) * 0.09, 0));
+    for (const s of ['L', 'R']) { J[s + 'shoulder'] = C.clone().add(V(0, 0, zs(s, 0.19))); J[s + 'wrist'] = grip.clone().setZ(zh + zs(s, 0.07)); J[s + 'elbow'] = ik(J[s + 'shoulder'], J[s + 'wrist'], LEN.upper, LEN.fore, V(0, 0.6, zs(s, 1))); }
+    return J;
+  },
+};
+const FLOOR_MOVES = ['catcow', 'child', 'kneehug'];
+
 // 동작 시간(초): 시작 정지 → 내려가기 → 바닥 정지 → 올라오기
 const TIMING = { squat: [0.6, 2.0, 0.4, 1.4], goodmorning: [0.6, 2.2, 0.4, 1.5], pushup: [0.6, 1.6, 0.3, 1.1] };
 const CAPS = {
@@ -212,7 +340,7 @@ const BONES = [
   ['Rhip', 'Rknee', 0.075, 0.055], ['Rknee', 'Rankle', 0.052, 0.04], ['Rheel', 'Rtoe', 0.04, 0.035],
   ['Lshoulder', 'Lelbow', 0.05, 0.042], ['Lelbow', 'Lwrist', 0.042, 0.034],
   ['Rshoulder', 'Relbow', 0.05, 0.042], ['Relbow', 'Rwrist', 0.042, 0.034],
-  ['pelvis', 'chest', 0.12, 0.135, 'torso'], ['Lhip', 'Rhip', 0.085, 0.085], ['Lshoulder', 'Rshoulder', 0.06, 0.06], ['neck', 'head', 0.045, 0.045],
+  ['pelvis', 'spine', 0.12, 0.128, 'torso'], ['spine', 'chest', 0.128, 0.135, 'torso'], ['Lhip', 'Rhip', 0.085, 0.085], ['Lshoulder', 'Rshoulder', 0.06, 0.06], ['neck', 'head', 0.045, 0.045],
 ];
 const JOINTS = ['Lknee', 'Rknee', 'Lelbow', 'Relbow', 'Lankle', 'Rankle', 'Lshoulder', 'Rshoulder', 'Lhip', 'Rhip'];
 const parts = BONES.map(([a, b, r1, r2, tag]) => {
@@ -232,7 +360,12 @@ function place(m, A, B) {
   m.scale.set(1, Math.max(1e-3, len), 1);
 }
 const JR = { knee: 0.058, elbow: 0.045, ankle: 0.045, shoulder: 0.065, hip: 0.08 };
+// 벽 (벽 짚는 동작용)
+const wall = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.2, 1.6), new THREE.MeshStandardMaterial({ color: 0xD5DBE6, roughness: 1 }));
+wall.position.y = 1.1; wall.receiveShadow = true; scene.add(wall);
 function pose(J) {
+  if (!J.spine) J.spine = J.pelvis.clone().add(J.chest).multiplyScalar(0.5);
+  wall.visible = J.wallX != null; if (wall.visible) wall.position.x = J.wallX + 0.03;
   for (const { a, b, m } of parts) place(m, J[a], J[b]);
   for (const { k, m } of jointMeshes) { m.position.copy(J[k]); m.scale.setScalar(JR[k.slice(1)]); }
   headMesh.position.copy(J.head);
@@ -241,16 +374,16 @@ function pose(J) {
   const axis = J.chest.clone().sub(J.pelvis).normalize();
   const off = V(-axis.y, axis.x, 0).normalize().multiplyScalar(0.14); // 축에 수직인 등 쪽 (+x를 보고 서거나 엎드린 사람 모두)
   place(backLine, J.pelvis.clone().add(off), J.chest.clone().add(off));
-  backLine.visible = ex !== 'squat';
+  backLine.visible = ex === 'goodmorning' || ex === 'pushup';
 }
 
 // 카메라: 끌어서 돌리기 + 보기 버튼
 const FOCUS = { squat: [V(0.05, 0.82, 0), 4.3], goodmorning: [V(0.05, 0.82, 0), 4.3], pushup: [V(-0.6, 0.3, 0), 3.6] };
 const VIEWS = { side: [0, 6], angle: [38, 14], front: [90, 8] };
 let az = 0, el = 6;
-function setView(v) { view = v; [az, el] = VIEWS[v]; if (ex === 'pushup' && v === 'front') { az = 25; el = 62; } }
+function setView(v) { view = v; [az, el] = VIEWS[v]; if (ex === 'pushup' && v === 'front') { az = 25; el = 62; } if (MOVES[ex] && v === 'side') { if (FLOOR_MOVES.includes(ex)) { az = 22; el = 16; } if (side === 'L') az = 180 - az; } }
 function placeCamera() {
-  const [c, r] = FOCUS[ex];
+  const [c, r] = FOCUS[ex] || (FLOOR_MOVES.includes(ex) ? [V(-0.15, 0.32, 0), 3.5] : ex === 'wallpush' ? [V(0.4, 0.85, 0), 4.4] : [V(0.12, 0.85, 0), 4.3]);
   const a = az * D, e = el * D;
   camera.position.set(c.x + r * Math.sin(a) * Math.cos(e), c.y + r * Math.sin(e), c.z + r * Math.cos(a) * Math.cos(e));
   camera.lookAt(c);
@@ -279,6 +412,7 @@ let lastK = -1;
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   if (playing) t += dt * speed;
+  if (MOVES[ex]) { pose(MOVES[ex](t)); resize(); placeCamera(); renderer.render(scene, camera); requestAnimationFrame(frame); return; }
   const ph = phaseAt(t), p = forcedP ?? ph.p, k = ph.k;
   pose(POSE[ex](p));
   if (k !== lastK) { $('caption').textContent = (ex === 'pushup' && pstyle === 'knees' ? CAPS_KNEES : CAPS[ex])[k]; lastK = k; }
@@ -365,7 +499,7 @@ const T = {
 <div class="box warn"><b>카메라로 못 보는 것</b><br>팔꿈치가 옆으로 벌어지는 것은 옆 카메라로 보이지 않아요.</div>`,
   },
 };
-function renderText() { $('how').innerHTML = T[ex].how; $('judge').innerHTML = T[ex].judge; }
+function renderText() { $('how').innerHTML = T[ex] ? T[ex].how : ''; $('judge').innerHTML = T[ex] ? T[ex].judge : ''; }
 
 function seg(id, cur, on) {
   const el = $(id);
@@ -377,6 +511,7 @@ function apply() {
   renderText(); setView(view); lastK = -1; t = 0;
   [...$('view').children].forEach(b => b.classList.toggle('sel', b.dataset.v === view));
   $('view').children[2].textContent = ex === 'pushup' ? '위' : '앞';
+  if (MOVES[ex]) return;
   const u = new URL(location.href); u.searchParams.set('ex', ex); if (ex === 'pushup') u.searchParams.set('style', pstyle); history.replaceState(null, '', u);
 }
 seg('ex', ex, (v) => { ex = v; apply(); });
@@ -386,7 +521,11 @@ seg('tab', 'how', (v) => { $('how').style.display = v === 'how' ? 'block' : 'non
 $('speed').onclick = () => { speed = speed === 1 ? 0.5 : 1; $('speed').textContent = speed === 1 ? '느리게' : '보통 속도'; };
 $('play').onclick = () => { playing = !playing; $('play').textContent = playing ? '멈춤' : '재생'; };
 if (q.get('tab') === 'judge') $('tab').children[1].click();
+if (!POSE[ex] && !MOVES[ex]) ex = 'squat';
 apply();
+// 세션 화면에서 동작을 바꿀 때 다시 불러오지 않고 바로 바꿈
+addEventListener('message', (e) => { const m = e.data || {}; if (m.type !== 'move' || e.origin !== location.origin) return; ex = m.ex; side = m.side === 'L' ? 'L' : 'R'; back = m.dir === 'back'; t = 0; apply(); });
+window.__guide.moves = Object.keys(MOVES);
 requestAnimationFrame(frame);
 </script>
 </body>

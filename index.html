@@ -76,6 +76,8 @@ label.lbl{font-size:14px;font-weight:600}
 .card{background:#F7F7F7;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.55}
 .btnrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .btnrow button{height:48px;border:1px solid #D6D6D6;border-radius:12px;background:#fff;font-size:15px;color:var(--ink)}
+#tPrev{width:100%;aspect-ratio:4/3;flex:none;border:0;border-radius:12px;background:#EEF1F6;display:block}
+#timer .big{font-size:52px}
 #rPrev{width:100%;aspect-ratio:4/3.75;border:0;border-radius:12px;background:#EEF1F6;display:block}
 .plan{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .plan li{display:flex;justify-content:space-between;gap:8px;background:#F7F7F7;border-radius:10px;padding:10px 12px;font-size:14px}
@@ -96,7 +98,7 @@ label.lbl{font-size:14px;font-weight:600}
 <body>
 
 <section id="intro" class="screen on">
-  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v31</small></h1>
+  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v32</small></h1>
   <div class="seg" id="flow" style="grid-template-columns:1fr 1fr">
     <button data-v="single" class="sel">종목 하나 테스트</button><button data-v="session">오늘의 운동 (세션)</button>
   </div>
@@ -234,7 +236,7 @@ label.lbl{font-size:14px;font-weight:600}
   <div class="kicker" id="tKicker">워밍업</div>
   <h2 id="tName"></h2>
   <p class="note" id="tDesc" style="font-size:15px;margin:0"></p>
-  <div style="flex:1"></div>
+  <iframe id="tPrev" title="예시 동작"></iframe>
   <div class="big" id="tTime">0:00</div>
   <div class="bar"><i id="tBar"></i></div>
   <div class="card" id="tNext"></div>
@@ -284,10 +286,10 @@ label.lbl{font-size:14px;font-weight:600}
 </section>
 
 <script type="module">
-import * as SQ from './squat-logic.js?v=31';
-import * as PL from './plan.js?v=31';
-import * as PU from './pushup-logic.js?v=31';
-import * as GM from './goodmorning-logic.js?v=31';
+import * as SQ from './squat-logic.js?v=32';
+import * as PL from './plan.js?v=32';
+import * as PU from './pushup-logic.js?v=32';
+import * as GM from './goodmorning-logic.js?v=32';
 
 // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식
 const EXERCISES = {
@@ -739,24 +741,29 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EX().line(r)} / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `${EX().name} 데모 v31 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `${EX().name} 데모 v32 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
 // ───────── v28: 운동 한 세션 (11단계 기획: 워밍업 5분 → 종목별 세트·휴식·체감 강도 → 쿨다운 5분 → 요약) ─────────
 // [이름, 설명, 초]. 워밍업은 가벼운 유산소 + 동적 스트레칭, 쿨다운은 천천히 걷기 + 정적 스트레칭 (ACSM 5~10분)
+// v32: [이름, 설명, 초, 예시 동작, 쪽(L/R), 방향] — 예시 동작은 guide.html의 마네킹 (옆에서 보이는 동작으로 구성)
 const WARMUP = [
-  ['제자리 걷기', '팔을 흔들며 가볍게 걸어요', 60], ['팔 크게 돌리기', '앞으로 15번, 뒤로 15번', 30],
-  ['다리 앞뒤로 흔들기', '벽을 짚고 한쪽씩 20초', 40], ['엉덩이 접기 연습', '손을 허리에 두고 엉덩이를 뒤로 빼며 살짝 숙였다 일어나요', 40],
-  ['반만 앉는 스쿼트', '편한 깊이까지만 천천히 앉았다 일어나요', 40], ['벽 짚고 팔굽혀펴기', '벽에 손을 짚고 천천히 굽혔다 펴요', 40],
-  ['고양이-소 자세', '네발 자세에서 등을 천천히 둥글게 말았다가 펴요', 50],
+  ['제자리 걷기', '팔을 흔들며 무릎을 가볍게 들어 걸어요', 60, 'march'],
+  ['팔 크게 돌리기 · 앞으로', '팔을 쭉 펴고 앞으로 크게 원을 그려요', 15, 'armcircle'], ['팔 크게 돌리기 · 뒤로', '이번엔 뒤로 크게 돌려요', 15, 'armcircle', 'R', 'back'],
+  ['다리 앞뒤로 흔들기 · 오른쪽', '벽을 짚고 오른쪽 다리를 앞뒤로 편하게 흔들어요', 20, 'legswing', 'R'], ['다리 앞뒤로 흔들기 · 왼쪽', '반대쪽도 똑같이', 20, 'legswing', 'L'],
+  ['엉덩이 접기 연습', '손을 가슴에 모으고, 등을 편 채 엉덩이를 뒤로 빼며 살짝 숙였다 일어나요', 40, 'hinge'],
+  ['반만 앉는 스쿼트', '편한 깊이까지만 천천히 앉았다 일어나요', 40, 'halfsquat'], ['벽 짚고 팔굽혀펴기', '벽에 손을 짚고 몸을 일직선으로, 천천히 굽혔다 펴요', 40, 'wallpush'],
+  ['고양이-소 자세', '네발 자세에서 숨을 내쉬며 등을 둥글게 말고, 들이쉬며 펴요', 50, 'catcow'],
 ];
+// 쿨다운은 서서 → 무릎 꿇고 → 누워서 순서 (엉덩이 늘이기는 옆에서 보이는 '무릎 당겨 안기'로)
 const COOLDOWN = [
-  ['천천히 제자리 걷기', '숨을 고르며 천천히 걸어요', 60],
-  ['허벅지 앞 늘이기 · 오른쪽', '벽을 짚고 오른쪽 발목을 잡아 엉덩이 쪽으로 당겨요', 30], ['허벅지 앞 늘이기 · 왼쪽', '반대쪽도 똑같이', 30],
-  ['허벅지 뒤 늘이기 · 오른쪽', '오른발을 앞으로 뻗고 등을 편 채 상체를 숙여요', 30], ['허벅지 뒤 늘이기 · 왼쪽', '반대쪽도 똑같이', 30],
-  ['엉덩이 늘이기 · 오른쪽', '누워서 오른쪽 발목을 왼쪽 무릎 위에 올려 4자 모양으로 당겨요', 30], ['엉덩이 늘이기 · 왼쪽', '반대쪽도 똑같이', 30],
-  ['가슴 늘이기', '문틀에 팔을 대고 몸을 천천히 앞으로', 30], ['아기 자세', '무릎을 꿇고 엎드려 팔을 앞으로 길게 뻗어요', 30],
+  ['천천히 제자리 걷기', '숨을 고르며 천천히 걸어요', 60, 'slowwalk'],
+  ['허벅지 앞 늘이기 · 오른쪽', '벽을 짚고 오른쪽 발목을 잡아 엉덩이 쪽으로 당겨요. 무릎은 아래를 향하게', 30, 'quad', 'R'], ['허벅지 앞 늘이기 · 왼쪽', '반대쪽도 똑같이', 30, 'quad', 'L'],
+  ['허벅지 뒤 늘이기 · 오른쪽', '오른발을 앞에 두고 발끝을 들어요. 등을 편 채 엉덩이를 뒤로 빼며 숙여요', 30, 'ham', 'R'], ['허벅지 뒤 늘이기 · 왼쪽', '반대쪽도 똑같이', 30, 'ham', 'L'],
+  ['가슴 늘이기', '등 뒤로 깍지를 끼고 팔을 쭉 펴서 살짝 들어 올려요', 30, 'chest'],
+  ['아기 자세', '무릎을 꿇고 엉덩이를 뒤꿈치 쪽으로, 팔을 앞으로 길게 뻗어요', 30, 'child'],
+  ['엉덩이 늘이기 · 오른쪽', '누워서 오른쪽 무릎을 두 손으로 감싸 가슴 쪽으로 당겨요', 30, 'kneehug', 'R'], ['엉덩이 늘이기 · 왼쪽', '반대쪽도 똑같이', 30, 'kneehug', 'L'],
 ];
 // 자리 안내: 종목이 바뀔 때 휴식 화면과 음성으로
 const PLACE = {
@@ -775,7 +782,7 @@ const GOAL_NAME = { diet: '체중 감량', muscle: '근육 키우기', fitness: 
 const RPE = { easy: ['쉬웠어요', 2], ok: ['적당해요', 0], hard: ['힘들어요', 0], max: ['한계예요', -2] };
 let slen = 'full';
 function buildPlan() {
-  const quick = slen === 'quick', scale = (list) => list.map(([n, d, t]) => [n, d, quick ? Math.max(6, Math.round(t / 6)) : t]);
+  const quick = slen === 'quick', scale = (list) => list.map(([n, d, t, ...rest]) => [n, d, quick ? Math.max(6, Math.round(t / 6)) : t, ...rest]);
   const items = [{ kind: 'timer', key: 'warmup', title: '워밍업', steps: scale(WARMUP) }];
   // v31: 내 플랜이 있으면 플랜의 세트·횟수·휴식, 없으면 입문자 기준 종목당 2세트 × 10회 안팎 (와이어프레임 홈 화면과 같음)
   const tp = store.plan ? PL.todayPlan(store.plan) : null;
@@ -898,6 +905,15 @@ function runItem() {
 }
 // 워밍업·쿨다운 타이머
 let tm = null;
+// 예시 동작: 처음 한 번만 불러오고, 다음 동작부터는 메시지로 바로 바꿈 (음성과 같은 순간에 바뀌게)
+let movesReady = false;
+$('tPrev').addEventListener('load', () => { movesReady = true; });
+function showMove([, , , key, side, dir]) {
+  const f = $('tPrev'); if (!key) { f.style.display = 'none'; return; }
+  f.style.display = 'block';
+  if (movesReady && f.contentWindow) f.contentWindow.postMessage({ type: 'move', ex: key, side, dir }, location.origin);
+  else f.src = `guide.html?v=32&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
+}
 function runTimer(it) {
   show('timer');
   tm = { it, k: 0, left: it.steps[0][2], paused: false, last: performance.now(), spoken: -1 };
@@ -909,7 +925,7 @@ function tickTimer() {
   tm.last = now;
   if (tm.left <= 0) { tm.k += 1; if (tm.k >= it.steps.length) return endTimer(); tm.left = it.steps[tm.k][2]; }
   const [name, desc, dur] = it.steps[tm.k], nx = it.steps[tm.k + 1];
-  if (tm.spoken !== tm.k) { tm.spoken = tm.k; say(`${tm.k === 0 ? it.title + ' 시작. ' : ''}${name}. ${desc}`, true); }
+  if (tm.spoken !== tm.k) { tm.spoken = tm.k; showMove(it.steps[tm.k]); say(`${tm.k === 0 ? it.title + ' 시작. ' : ''}${name}. ${desc}`, true); }
   $('tKicker').textContent = `${it.title} · ${tm.k + 1} / ${it.steps.length}`;
   $('tName').textContent = name; $('tDesc').textContent = desc;
   $('tTime').textContent = fmt(Math.ceil(tm.left));
@@ -1036,7 +1052,7 @@ function finishSession() {
 $('dHome').onclick = () => { session = null; show('intro'); $('startBtn').disabled = false; applyFlow(); };
 $('dCopy').onclick = async () => {
   const S = session; if (!S) return;
-  const lines = [`오늘의 운동 데모 v31 결과 [${mode}·푸시업 ${({ full: '기본', knees: '무릎', incline: '의자' })[pstyle]}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
+  const lines = [`오늘의 운동 데모 v32 결과 [${mode}·푸시업 ${({ full: '기본', knees: '무릎', incline: '의자' })[pstyle]}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
   for (const x of S.sets) {
     lines.push(`■ ${EXERCISES[x.ex].name} ${x.set}/${x.of}세트 (목표 ${x.target}회, 체감 ${x.rpe ? RPE[x.rpe][0] : '-'})`);
     x.log.forEach(r => lines.push(`${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EXERCISES[x.ex].line(r)}`));
