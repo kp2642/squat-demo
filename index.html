@@ -98,7 +98,7 @@ label.lbl{font-size:14px;font-weight:600}
 <body>
 
 <section id="intro" class="screen on">
-  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v32</small></h1>
+  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v33</small></h1>
   <div class="seg" id="flow" style="grid-template-columns:1fr 1fr">
     <button data-v="single" class="sel">종목 하나 테스트</button><button data-v="session">오늘의 운동 (세션)</button>
   </div>
@@ -286,10 +286,10 @@ label.lbl{font-size:14px;font-weight:600}
 </section>
 
 <script type="module">
-import * as SQ from './squat-logic.js?v=32';
-import * as PL from './plan.js?v=32';
-import * as PU from './pushup-logic.js?v=32';
-import * as GM from './goodmorning-logic.js?v=32';
+import * as SQ from './squat-logic.js?v=33';
+import * as PL from './plan.js?v=33';
+import * as PU from './pushup-logic.js?v=33';
+import * as GM from './goodmorning-logic.js?v=33';
 
 // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식
 const EXERCISES = {
@@ -741,17 +741,17 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EX().line(r)} / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `${EX().name} 데모 v32 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `${EX().name} 데모 v33 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
 // ───────── v28: 운동 한 세션 (11단계 기획: 워밍업 5분 → 종목별 세트·휴식·체감 강도 → 쿨다운 5분 → 요약) ─────────
 // [이름, 설명, 초]. 워밍업은 가벼운 유산소 + 동적 스트레칭, 쿨다운은 천천히 걷기 + 정적 스트레칭 (ACSM 5~10분)
-// v32: [이름, 설명, 초, 예시 동작, 쪽(L/R), 방향] — 예시 동작은 guide.html의 마네킹 (옆에서 보이는 동작으로 구성)
+// v32~: [이름, 설명, 초, 예시 동작, 쪽(L/R), 방향] — 예시 동작은 guide.html의 마네킹 (옆에서 보이는 동작으로 구성)
 const WARMUP = [
   ['제자리 걷기', '팔을 흔들며 무릎을 가볍게 들어 걸어요', 60, 'march'],
   ['팔 크게 돌리기 · 앞으로', '팔을 쭉 펴고 앞으로 크게 원을 그려요', 15, 'armcircle'], ['팔 크게 돌리기 · 뒤로', '이번엔 뒤로 크게 돌려요', 15, 'armcircle', 'R', 'back'],
-  ['다리 앞뒤로 흔들기 · 오른쪽', '벽을 짚고 오른쪽 다리를 앞뒤로 편하게 흔들어요', 20, 'legswing', 'R'], ['다리 앞뒤로 흔들기 · 왼쪽', '반대쪽도 똑같이', 20, 'legswing', 'L'],
+  ['다리 앞뒤로 흔들기 · 오른쪽', '벽을 왼쪽 옆에 두고 왼손으로 짚은 뒤, 오른쪽 다리를 앞뒤로 편하게 흔들어요', 20, 'legswing', 'R'], ['다리 앞뒤로 흔들기 · 왼쪽', '돌아서서 벽을 오른쪽에 두고 오른손으로 짚은 뒤, 왼쪽 다리를 흔들어요', 20, 'legswing', 'L'],
   ['엉덩이 접기 연습', '손을 가슴에 모으고, 등을 편 채 엉덩이를 뒤로 빼며 살짝 숙였다 일어나요', 40, 'hinge'],
   ['반만 앉는 스쿼트', '편한 깊이까지만 천천히 앉았다 일어나요', 40, 'halfsquat'], ['벽 짚고 팔굽혀펴기', '벽에 손을 짚고 몸을 일직선으로, 천천히 굽혔다 펴요', 40, 'wallpush'],
   ['고양이-소 자세', '네발 자세에서 숨을 내쉬며 등을 둥글게 말고, 들이쉬며 펴요', 50, 'catcow'],
@@ -912,7 +912,7 @@ function showMove([, , , key, side, dir]) {
   const f = $('tPrev'); if (!key) { f.style.display = 'none'; return; }
   f.style.display = 'block';
   if (movesReady && f.contentWindow) f.contentWindow.postMessage({ type: 'move', ex: key, side, dir }, location.origin);
-  else f.src = `guide.html?v=32&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
+  else f.src = `guide.html?v=33&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
 }
 function runTimer(it) {
   show('timer');
@@ -1052,7 +1052,7 @@ function finishSession() {
 $('dHome').onclick = () => { session = null; show('intro'); $('startBtn').disabled = false; applyFlow(); };
 $('dCopy').onclick = async () => {
   const S = session; if (!S) return;
-  const lines = [`오늘의 운동 데모 v32 결과 [${mode}·푸시업 ${({ full: '기본', knees: '무릎', incline: '의자' })[pstyle]}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
+  const lines = [`오늘의 운동 데모 v33 결과 [${mode}·푸시업 ${({ full: '기본', knees: '무릎', incline: '의자' })[pstyle]}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
   for (const x of S.sets) {
     lines.push(`■ ${EXERCISES[x.ex].name} ${x.set}/${x.of}세트 (목표 ${x.target}회, 체감 ${x.rpe ? RPE[x.rpe][0] : '-'})`);
     x.log.forEach(r => lines.push(`${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EXERCISES[x.ex].line(r)}`));
