@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="자세 코치">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
 <meta name="theme-color" content="#1E1E1E">
 <title>자세 코치 데모</title>
 <style>
@@ -77,6 +80,15 @@ label.lbl{font-size:14px;font-weight:600}
 .plan{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .plan li{display:flex;justify-content:space-between;gap:8px;background:#F7F7F7;border-radius:10px;padding:10px 12px;font-size:14px}
 .plan li span{color:var(--muted)}
+/* v31: 내 플랜 */
+.light input{height:44px;border:1px solid #D6D6D6;border-radius:10px;padding:0 10px;font-size:16px;width:100%;min-width:0;color:var(--ink);background:#fff}
+.q{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid #EEE;font-size:14px;line-height:1.5}
+.q .seg{grid-template-columns:1fr 1fr}.q .seg button{height:38px;font-size:14px}
+.q .seg button.yes.sel{background:#B35900}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.grid3 label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.card.warn{background:#FFF4E8}
+.badge{display:inline-block;background:#E8F0FF;color:var(--blue);border-radius:99px;padding:2px 8px;font-size:12px;font-weight:700;margin-left:6px}
+.hist{display:flex;flex-direction:column;gap:6px}.hist div{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:8px 12px;border:1px solid #EEE;border-radius:10px}.hist span{color:var(--muted)}
 .linkbtn{border:none;background:none;color:var(--muted);font-size:14px;text-decoration:underline;padding:8px}
 @media (orientation:landscape){#live{flex-direction:row}#ctrl{grid-template-columns:1fr;grid-auto-rows:min-content;align-content:center;width:170px;padding:12px calc(env(safe-area-inset-right) + 12px) 12px 12px}#ctrl button{height:48px;font-size:15px}#count{font-size:44px}#count small{font-size:18px}}
 </style>
@@ -84,19 +96,20 @@ label.lbl{font-size:14px;font-weight:600}
 <body>
 
 <section id="intro" class="screen on">
-  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v30</small></h1>
+  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v31</small></h1>
   <div class="seg" id="flow" style="grid-template-columns:1fr 1fr">
     <button data-v="single" class="sel">종목 하나 테스트</button><button data-v="session">오늘의 운동 (세션)</button>
   </div>
   <div id="sessionBox" style="display:none;flex-direction:column;gap:12px">
-    <p style="margin:0">실제 하루 운동처럼 워밍업부터 쿨다운까지 이어서 해요. 세트마다 카메라가 세고 자세를 봐 주고, 세트 사이에는 휴식 타이머가 돌아요.</p>
+    <div id="myPlan"></div>
     <div>
       <label class="lbl">길이</label>
       <div class="seg" id="slen" style="grid-template-columns:1fr 1fr">
-        <button data-v="full" class="sel">전체 (약 25분)</button><button data-v="quick">빠른 체험 (약 7분)</button>
+        <button data-v="full" class="sel" id="slenFull">전체 (약 25분)</button><button data-v="quick">빠른 체험 (약 7분)</button>
       </div>
     </div>
     <ul class="plan" id="planList"></ul>
+    <div id="histBox"></div>
   </div>
   <div id="singleBox" style="display:flex;flex-direction:column;gap:18px">
   <div>
@@ -193,6 +206,30 @@ label.lbl{font-size:14px;font-weight:600}
   <button class="primary" id="againBtn">한 세트 더</button>
 </section>
 
+<section id="setup" class="screen light">
+  <div class="kicker">내 플랜 만들기 · 약 1분</div>
+  <h2>먼저 건강 상태를 확인할게요</h2>
+  <p class="note" style="font-size:13px;margin:0">운동 전에 국제적으로 쓰는 건강 확인 질문(PAR-Q+)이에요. 해당하면 '예'를 눌러 주세요. 답은 이 휴대폰에만 저장돼요.</p>
+  <div id="parq"></div>
+  <div class="card warn" id="parqWarn" style="display:none">'예'가 있어요. 운동을 시작하기 전에 의사와 상담하기를 권해요. 계속하면 쉬운 단계와 '편하게' 판정 기준으로 시작하고, 세트도 2세트까지만 해요.</div>
+  <h2 style="margin-top:8px">나에 대해 알려 주세요</h2>
+  <div class="grid3">
+    <label>나이<input id="pAge" type="number" inputmode="numeric" min="14" max="100" placeholder="30"></label>
+    <label>키 (cm)<input id="pHeight" type="number" inputmode="decimal" min="120" max="230" placeholder="170"></label>
+    <label>체중 (kg)<input id="pWeight" type="number" inputmode="decimal" min="30" max="250" placeholder="65"></label>
+  </div>
+  <div><label class="lbl">운동 경력</label>
+    <div class="seg" id="pLevel" style="grid-template-columns:repeat(3,1fr);margin-top:6px"><button data-v="new">처음이에요</button><button data-v="lt6">6개월 미만</button><button data-v="ge6">6개월 이상</button></div></div>
+  <div><label class="lbl">목표</label>
+    <div class="seg" id="pGoal" style="grid-template-columns:repeat(3,1fr);margin-top:6px"><button data-v="diet">체중 감량</button><button data-v="muscle">근육 키우기</button><button data-v="fitness">체력 유지</button></div></div>
+  <div><label class="lbl">일주일에 몇 번</label>
+    <div class="seg" id="pDays" style="grid-template-columns:repeat(3,1fr);margin-top:6px"><button data-v="2">2번</button><button data-v="3">3번</button><button data-v="4">4번</button></div>
+    <p class="note" style="margin:6px 0 0">처음이면 2~3번을 권해요. 같은 근육은 하루 이상 쉬고 운동하세요.</p></div>
+  <div id="setupErr" style="color:#B00020;font-size:14px"></div>
+  <button class="primary" id="makePlan">플랜 만들기</button>
+  <button class="linkbtn" id="setupCancel">취소</button>
+</section>
+
 <section id="timer" class="screen light">
   <div class="kicker" id="tKicker">워밍업</div>
   <h2 id="tName"></h2>
@@ -247,9 +284,10 @@ label.lbl{font-size:14px;font-weight:600}
 </section>
 
 <script type="module">
-import * as SQ from './squat-logic.js?v=30';
-import * as PU from './pushup-logic.js?v=30';
-import * as GM from './goodmorning-logic.js?v=30';
+import * as SQ from './squat-logic.js?v=31';
+import * as PL from './plan.js?v=31';
+import * as PU from './pushup-logic.js?v=31';
+import * as GM from './goodmorning-logic.js?v=31';
 
 // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식
 const EXERCISES = {
@@ -701,7 +739,7 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EX().line(r)} / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `${EX().name} 데모 v30 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `${EX().name} 데모 v31 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
@@ -726,14 +764,24 @@ const PLACE = {
   goodmorning: '스쿼트와 같은 자리에서 옆으로 서요. 숙일 때 앞쪽에 공간이 필요해요. 손은 가슴에 X자로.',
   pushup: '휴대폰을 바닥에 가로로 세우고, 옆모습이 보이게 엎드려요.',
 };
+// v31: 내 플랜과 기록은 이 휴대폰에만 저장 (영상·관절 데이터는 저장하지 않음)
+const STORE = 'coach.v1';
+const store = (() => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } })();
+store.history = store.history || [];
+const saveStore = () => { try { localStorage.setItem(STORE, JSON.stringify(store)); } catch {} };
+const pick = (id, v) => [...$(id).children].forEach(c => c.classList.toggle('sel', c.dataset.v === String(v)));
+const STYLE_NAME = { full: '기본', knees: '무릎 대고', incline: '의자 짚고' };
+const GOAL_NAME = { diet: '체중 감량', muscle: '근육 키우기', fitness: '체력 유지' };
 const RPE = { easy: ['쉬웠어요', 2], ok: ['적당해요', 0], hard: ['힘들어요', 0], max: ['한계예요', -2] };
 let slen = 'full';
 function buildPlan() {
-  const quick = slen === 'quick', sets = quick ? 1 : 2, scale = (list) => list.map(([n, d, t]) => [n, d, quick ? Math.max(6, Math.round(t / 6)) : t]);
+  const quick = slen === 'quick', scale = (list) => list.map(([n, d, t]) => [n, d, quick ? Math.max(6, Math.round(t / 6)) : t]);
   const items = [{ kind: 'timer', key: 'warmup', title: '워밍업', steps: scale(WARMUP) }];
-  // 입문자 기준: 종목당 2세트 × 10회 안팎, 휴식 스쿼트 90초·나머지 60초 (와이어프레임 홈 화면과 같음)
-  for (const [ex, reps, rest] of [['squat', 10, 90], ['goodmorning', 10, 60], ['pushup', pstyle === 'full' ? 8 : 10, 60]])
-    for (let n = 1; n <= sets; n++) items.push({ kind: 'set', ex, set: n, of: sets, reps: quick ? 5 : reps, rest: quick ? 20 : rest });
+  // v31: 내 플랜이 있으면 플랜의 세트·횟수·휴식, 없으면 입문자 기준 종목당 2세트 × 10회 안팎 (와이어프레임 홈 화면과 같음)
+  const tp = store.plan ? PL.todayPlan(store.plan) : null;
+  const list = tp ? tp.items.map(i => [i.ex, i.reps, i.rest, i.sets]) : [['squat', 10, 90, 2], ['goodmorning', 10, 60, 2], ['pushup', pstyle === 'full' ? 8 : 10, 60, 2]];
+  for (const [ex, reps, rest, ns] of list)
+    for (let n = 1, sets = quick ? 1 : ns; n <= sets; n++) items.push({ kind: 'set', ex, set: n, of: sets, reps: quick ? 5 : reps, rest: quick ? 20 : rest });
   items.push({ kind: 'timer', key: 'cooldown', title: '쿨다운', steps: scale(COOLDOWN) });
   return items;
 }
@@ -745,11 +793,89 @@ function renderPlan() {
     else if (it.set === 1) li.push(`<li><b>${EXERCISES[it.ex].name}${it.ex === 'pushup' ? ' (' + ({ full: '기본', knees: '무릎 대고', incline: '의자 짚고' })[pstyle] + ')' : ''}</b><span>${it.of}세트 × ${it.reps}회 · 휴식 ${it.rest}초</span></li>`);
   }
   $('planList').innerHTML = li.join('');
+  renderMyPlan();
 }
+function renderMyPlan() {
+  const pl = store.plan, standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+  const install = standalone ? '' : '<p class="note" style="margin:8px 0 0">사파리 공유 버튼 → "홈 화면에 추가"를 하면 앱처럼 열리고 기록도 계속 남아요.</p>';
+  $('slenFull').textContent = pl ? '내 플랜대로' : '기본 (약 25분)';
+  if (!pl) {
+    $('myPlan').innerHTML = `<div class="card"><b>아직 내 플랜이 없어요</b><br>건강 확인과 몇 가지 질문에 답하면 경력·목표에 맞춰 세트와 횟수를 정하고, 운동할 때마다 다음 횟수를 조절해 드려요.${install}</div><button class="ghost" id="openSetup" style="margin-top:8px">내 플랜 만들기 (약 1분)</button>`;
+  } else {
+    const { week, recovery } = PL.weekInfo(pl), c = PL.counts(store.history);
+    $('myPlan').innerHTML = `<div class="card"><b>내 플랜 · ${week}주차</b>${recovery ? '<span class="badge">회복 주</span>' : ''}<br>${GOAL_NAME[pl.goal]} · 주 ${pl.days}회 · 이번 주 <b>${c.thisWeek} / ${pl.days}회</b> · 최근 2주 ${c.last14}회`
+      + (recovery ? '<br><span class="note">4주마다 한 번은 몸이 회복하도록 세트를 하나씩 줄여요.</span>' : '')
+      + (pl.goal === 'diet' ? '<br><span class="note">체중 감량은 빠르게 걷기 같은 유산소를 주 150분 함께 하면 좋아요.</span>' : '')
+      + (pl.careful ? '<br><span class="note">건강 확인 결과에 따라 쉬운 단계로 시작했어요. 운동 전 의사와 상담을 권해요.</span>' : '')
+      + `${install}</div><button class="linkbtn" id="openSetup" style="align-self:flex-start;padding:4px 0">플랜 다시 만들기</button>`;
+  }
+  $('openSetup').onclick = openSetup;
+  const h = store.history.slice(-5).reverse();
+  $('histBox').innerHTML = h.length ? '<label class="lbl">최근 기록</label><div class="hist" style="margin-top:6px">' + h.map(x => {
+    const d = new Date(x.at), reps = x.sets.reduce((a, s) => a + s.counted, 0), sc = x.sets.filter(s => s.avg != null), avg = sc.length ? Math.round(sc.reduce((a, s) => a + s.avg, 0) / sc.length) : null;
+    return `<div><b>${d.getMonth() + 1}월 ${d.getDate()}일${x.quick ? ' · 빠른 체험' : ''}</b><span>${x.sets.length}세트 · ${reps}회${avg != null ? ' · 자세 ' + avg + '점' : ''}</span></div>`;
+  }).join('') + '</div>' : '';
+}
+
+// 첫 설정 (PAR-Q+ 일반 질문 7개를 쉬운 말로 옮김)
+const PARQ = [
+  '의사에게 심장 질환이나 고혈압이 있다는 말을 들은 적이 있나요?',
+  '쉬고 있을 때, 일상생활 중, 또는 운동할 때 가슴 통증을 느낀 적이 있나요?',
+  '최근 12개월 안에 어지러워서 균형을 잃거나 의식을 잃은 적이 있나요? (운동 중 숨이 차서 어지러웠던 건 빼고)',
+  '심장 질환·고혈압 말고 다른 만성 질환(당뇨, 천식, 관절염 등)을 진단받은 적이 있나요?',
+  '지금 만성 질환 때문에 처방약을 먹고 있나요?',
+  '지금(또는 최근 12개월 안에) 운동하면 더 나빠질 수 있는 뼈·관절·근육 문제가 있나요?',
+  '의사가 의료진이 지켜볼 때만 운동하라고 한 적이 있나요?',
+];
+let setupAns = {};
+function openSetup() {
+  const p = store.profile || {};
+  setupAns = { parq: p.parq ? [...p.parq] : PARQ.map(() => null), level: p.level, goal: p.goal, days: p.days || 3 };
+  $('parq').innerHTML = PARQ.map((q, i) => `<div class="q"><span>${i + 1}. ${q}</span><div class="seg" data-i="${i}"><button data-v="0">아니오</button><button data-v="1" class="yes">예</button></div></div>`).join('');
+  $('parq').querySelectorAll('.seg').forEach(el => {
+    const i = +el.dataset.i;
+    if (setupAns.parq[i] != null) [...el.children].forEach(c => c.classList.toggle('sel', c.dataset.v === String(setupAns.parq[i])));
+    el.onclick = (e) => { const b = e.target.closest('button'); if (!b) return; setupAns.parq[i] = +b.dataset.v; [...el.children].forEach(c => c.classList.toggle('sel', c === b)); $('parqWarn').style.display = setupAns.parq.some(v => v === 1) ? 'block' : 'none'; };
+  });
+  $('parqWarn').style.display = setupAns.parq.some(v => v === 1) ? 'block' : 'none';
+  $('pAge').value = p.age || ''; $('pHeight').value = p.height || ''; $('pWeight').value = p.weight || '';
+  ['pLevel', 'pGoal', 'pDays'].forEach(id => pick(id, setupAns[{ pLevel: 'level', pGoal: 'goal', pDays: 'days' }[id]]));
+  $('setupErr').textContent = '';
+  show('setup'); $('setup').scrollTop = 0;
+}
+seg('pLevel', v => setupAns.level = v);
+seg('pGoal', v => setupAns.goal = v);
+seg('pDays', v => setupAns.days = +v);
+$('setupCancel').onclick = () => show('intro');
+$('makePlan').onclick = () => {
+  const age = +$('pAge').value, height = +$('pHeight').value, weight = +$('pWeight').value, err = (t) => { $('setupErr').textContent = t; };
+  if (setupAns.parq.some(v => v == null)) return err('건강 확인 질문에 모두 답해 주세요.');
+  if (!(age >= 14 && age <= 100)) return err('나이를 확인해 주세요. 만 14세 이상만 쓸 수 있어요.');
+  if (!(height >= 120 && height <= 230) || !(weight >= 30 && weight <= 250)) return err('키와 체중을 확인해 주세요.');
+  if (!setupAns.level || !setupAns.goal) return err('운동 경력과 목표를 골라 주세요.');
+  const old = store.plan;
+  store.profile = { age, height, weight, level: setupAns.level, goal: setupAns.goal, days: setupAns.days, parq: setupAns.parq, at: Date.now() };
+  store.plan = PL.makePlan(store.profile);
+  // 다시 만들 때는 그동안 올린 횟수를 이어받음 (경력·건강 확인이 바뀌어도 더 쉬운 쪽을 택함)
+  if (old) for (const k of PL.EXS) { store.plan.ex[k].reps = Math.min(Math.max(store.plan.ex[k].reps, old.ex[k].reps), store.plan.cap); store.plan.ex[k].sets = Math.min(store.plan.ex[k].sets, Math.max(old.ex[k].sets, store.plan.ex[k].sets)); store.plan.start = old.start; }
+  saveStore();
+  try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
+  flow = 'session'; pick('flow', 'session'); slen = 'full'; pick('slen', 'full');
+  applyFlow(); show('intro');
+};
+// 플랜의 판정 기준·푸시업 자세를 시작 화면에 반영하고, 세션 화면에서 바꾸면 플랜에 저장
+function usePlanSettings() {
+  if (!store.plan) return;
+  mode = store.plan.mode; pick('mode', mode); $('modeNote').textContent = EX().modeNote[mode];
+  pstyle = store.plan.pstyle; pick('pstyle', pstyle);
+}
+$('mode').addEventListener('click', () => setTimeout(() => { if (flow === 'session' && store.plan) { store.plan.mode = mode; saveStore(); } }));
+$('pstyle').addEventListener('click', () => setTimeout(() => { if (flow === 'session' && store.plan) { store.plan.pstyle = pstyle; saveStore(); } }));
 function applyFlow() {
   $('sessionBox').style.display = flow === 'session' ? 'flex' : 'none';
   $('singleBox').style.display = flow === 'session' ? 'none' : 'flex';
   $('startBtn').textContent = flow === 'session' ? '오늘의 운동 시작' : '시작하기';
+  if (flow === 'session') usePlanSettings();
   applyExercise(); renderPlan();
 }
 seg('flow', v => { flow = v; applyFlow(); });
@@ -758,7 +884,7 @@ $('pstyle').addEventListener('click', () => setTimeout(renderPlan));
 
 function startSession() {
   say('', true); // iOS 음성 잠금 해제 (사용자 터치 안에서)
-  session = { items: buildPlan(), i: 0, startAt: Date.now(), sets: [], adj: {} };
+  session = { items: buildPlan(), i: 0, startAt: Date.now(), sets: [], adj: {}, recovery: !!(store.plan && PL.weekInfo(store.plan).recovery) };
   loadModel().catch(() => {}); // 워밍업 동안 자세 인식 모델을 미리 받아 둠
   runItem();
 }
@@ -885,12 +1011,32 @@ function finishSession() {
   $('dTips').innerHTML = top.length ? top.map((t, i) => `<div class="rep" style="flex-wrap:nowrap"><span class="n">${i + 1}</span><span class="d"><b>${t.text}</b><br><small>${EXERCISES[t.ex].name} · ${t.n}회 지적</small></span></div>`).join('') : (total ? '<p class="note">지적받은 자세가 없어요. 잘했어요!</p>' : '<p class="note">인식된 반복이 없어요. 휴대폰 위치를 확인해 보세요.</p>');
   const rp = S.sets.map(x => x.rpe).filter(Boolean), easy = rp.filter(v => v === 'easy').length, hard = rp.filter(v => v === 'max').length;
   $('dNext').textContent = easy > rp.length / 2 ? '대부분 쉬웠어요. 다음 운동은 종목당 횟수를 2회씩 늘려요.' : hard ? '한계였던 세트가 있었어요. 다음 운동은 그 종목 횟수를 줄여요.' : '강도가 적당했어요. 다음 운동도 같은 구성으로 해요.';
+  // v31: 기록 저장 + 내 플랜이면 다음 운동 횟수 조절 (빠른 체험은 기록만)
+  if (!S.saved && S.sets.length) {
+    S.saved = true;
+    const sets = S.sets.map(x => ({ ex: x.ex, set: x.set, target: x.target, counted: x.log.filter(r => r.counted).length, attempts: x.log.length, avg: x.log.length ? Math.round(x.log.reduce((a, r) => a + r.score, 0) / x.log.length) : null, rpe: x.rpe }));
+    const quick = slen === 'quick';
+    store.history.push({ day: PL.dayKey(new Date()), at: Date.now(), quick, mins, mode, pstyle, sets });
+    if (store.history.length > 300) store.history.splice(0, store.history.length - 300);
+    if (!quick && store.plan) {
+      const ch = PL.progress(store.plan, sets, S.recovery);
+      const WHY = { easy: '쉬웠다고 해서', hit: '목표를 다 채워서', same: '그대로 한 번 더', max: '한계였던 세트가 있어서', missed: '목표의 70%를 못 채워서', addSet: '횟수가 충분해서 세트를 하나 늘려요', nextStyle: '다음 단계 자세로 올라가요!', top: '최고 단계예요. 지금을 유지해요', recovery: '회복 주라 그대로', partial: '세트를 다 못 해서 그대로' };
+      const lines = Object.entries(ch).map(([k, c]) => {
+        const f = c.from, t = c.to, nm = EXERCISES[k].name;
+        if (c.why === 'nextStyle') return `${nm}: ${STYLE_NAME[f.style]} → <b>${STYLE_NAME[t.style]}</b> ${t.sets}세트 × ${t.reps}회 · ${WHY[c.why]}`;
+        const changed = f.reps !== t.reps || f.sets !== t.sets;
+        return `${nm}: ${changed ? `${f.sets}×${f.reps} → <b>${t.sets}세트 × ${t.reps}회</b>` : `<b>${t.sets}세트 × ${t.reps}회</b>`} · ${WHY[c.why]}`;
+      });
+      if (lines.length) $('dNext').innerHTML = '<b>다음 운동</b><br>' + lines.join('<br>');
+    }
+    saveStore();
+  }
   show('done'); say('오늘 운동 끝! 수고했어요.', true);
 }
 $('dHome').onclick = () => { session = null; show('intro'); $('startBtn').disabled = false; applyFlow(); };
 $('dCopy').onclick = async () => {
   const S = session; if (!S) return;
-  const lines = [`오늘의 운동 데모 v30 결과 [${mode}·푸시업 ${({ full: '기본', knees: '무릎', incline: '의자' })[pstyle]}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
+  const lines = [`오늘의 운동 데모 v31 결과 [${mode}·푸시업 ${({ full: '기본', knees: '무릎', incline: '의자' })[pstyle]}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
   for (const x of S.sets) {
     lines.push(`■ ${EXERCISES[x.ex].name} ${x.set}/${x.of}세트 (목표 ${x.target}회, 체감 ${x.rpe ? RPE[x.rpe][0] : '-'})`);
     x.log.forEach(r => lines.push(`${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EXERCISES[x.ex].line(r)}`));
