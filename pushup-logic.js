@@ -47,7 +47,9 @@ export const MODES = {
   // v17: '전체적으로 엄격하다'는 의견 → 편하게는 팔꿈치 120°까지 인정, 130°보다 덜 굽혀야만 안 셈, 솟음 감점 최대 15점
   relaxed: { depthElbow: 120, sagTol: 15, pikeTol: 25, noRepLine: Infinity, noRepElbow: 130, pikePenaltyMax: 15 },
   // v18: 정확하게도 100°까지 인정(카메라가 팔꿈치 각을 실제보다 크게 읽는 경향 감안), 115°보다 덜 굽히면 안 셈
-  strict: { depthElbow: 100, sagTol: 10, pikeTol: 15, noRepLine: 5, noRepElbow: 115, pikePenaltyMax: 25 },
+  // v35(11-09 실측): 팔꿈치 105·113°까지만 0.4~0.5초에 내려간 반쪽 반복이 감점만 받고 세어짐 → 110°보다 덜 굽히면 안 셈,
+  // 0.5초보다 빨리 내려가면 안 셈 (바른 반복은 0.77~1.08초)
+  strict: { depthElbow: 100, sagTol: 10, pikeTol: 15, noRepLine: 5, noRepElbow: 110, noRepFastMs: 500, pikePenaltyMax: 25 },
 };
 
 const deg = (r) => (r * 180) / Math.PI;
@@ -116,6 +118,7 @@ export const NOREP_TEXT = {
   sag: '허리가 처져서 이번은 세지 않아요',
   depth: '더 내려가야 세요',
   pike: '몸이 일직선이 아니라서 이번은 세지 않아요',
+  tempo: '너무 빨리 내려가서 이번은 세지 않아요',
 };
 
 export class PushupCounter {
@@ -245,6 +248,7 @@ export class PushupCounter {
     if (faults.includes('collapse')) noRep = 'collapse';
     else if (sagOver > t.noRepSagOver) noRep = 'sag';
     else if (c.minElbow > t.noRepElbow) noRep = 'depth';
+    else if (t.noRepFastMs && c.bottomAt - c.startAt < t.noRepFastMs) noRep = 'tempo';
     else if (sagOver >= t.noRepLine) noRep = 'sag';
     else if (pikeOver >= t.noRepLine) noRep = 'pike';
     this.attempts += 1;
