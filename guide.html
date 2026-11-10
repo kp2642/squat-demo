@@ -334,6 +334,336 @@ const MOVES = {
 };
 const FLOOR_MOVES = ['catcow', 'child', 'kneehug'];
 const FRONT_WALL = ['quad', 'wallpush']; // 앞에 벽이 있는 동작은 벽이 몸을 가리지 않게 살짝 뒤쪽에서 봄
+// ── v36: 18단계 집 맨몸 종목 (t: 초, 계속 반복). 사람은 +x를 봄. 누우면 좌우 z가 바뀌는 것에 주의 ──
+const BODY_KEYS = ['Lhip', 'Lknee', 'Lankle', 'Lheel', 'Ltoe', 'Rhip', 'Rknee', 'Rankle', 'Rheel', 'Rtoe', 'Lshoulder', 'Lelbow', 'Lwrist', 'Rshoulder', 'Relbow', 'Rwrist', 'pelvis', 'spine', 'chest', 'neck', 'head'];
+// 두 자세 사이를 섞음 (키프레임 동작용)
+function mixJ(A, B, p) {
+  const J = {};
+  for (const k of BODY_KEYS) { if (A[k] && B[k]) J[k] = A[k].clone().lerp(B[k], p); else if (A[k] || B[k]) J[k] = (A[k] || B[k]).clone(); }
+  for (const k of ['wallX', 'wallZ', 'chairX', 'hl']) if (A[k] != null || B[k] != null) J[k] = A[k] ?? B[k];
+  return J;
+}
+function shiftJ(J, d) { for (const k of BODY_KEYS) if (J[k]) J[k] = J[k].clone().add(d); return J; }
+// 다리를 엉덩이 H와 발목 A로 정하고 무릎은 IK (pole: 무릎이 향할 쪽)
+function legTo(J, s, H, A, pole, toe = V(1, 0, 0), up = V(0, 1, 0)) {
+  J[s + 'hip'] = H; J[s + 'ankle'] = A; J[s + 'knee'] = ik(H, A, LEN.thigh, LEN.shin, pole);
+  J[s + 'heel'] = A.clone().add(toe.clone().multiplyScalar(-0.06)).add(up.clone().multiplyScalar(-0.05));
+  J[s + 'toe'] = A.clone().add(toe.clone().multiplyScalar(0.17)).add(up.clone().multiplyScalar(-0.06));
+}
+function armTo(J, s, W, pole) { J[s + 'wrist'] = W; J[s + 'elbow'] = ik(J[s + 'shoulder'], W, LEN.upper, LEN.fore, pole); }
+// 몸통: 골반 P에서 방향 u로 몸통을 세우고 어깨는 오른쪽 축 R 방향으로
+function trunk(J, P, u, R, look) {
+  J.pelvis = P; J.chest = P.clone().add(u.clone().multiplyScalar(LEN.torso));
+  J.Lshoulder = J.chest.clone().add(R.clone().multiplyScalar(-0.19)); J.Rshoulder = J.chest.clone().add(R.clone().multiplyScalar(0.19));
+  head(J, J.chest.clone().add(u.clone().multiplyScalar(0.05)), (look || u).clone().normalize());
+}
+const ZR = V(0, 0, 1), ZL = V(0, 0, -1);
+const rep = (t, per, T = [0.15, 0.35, 0.15, 0.35]) => cyc((t % per) / per * T.reduce((a, b) => a + b, 0), T); // 한 번 반복의 0→1→0
+const ALT = (t, per) => (Math.floor(t / per) % 2 === 0 ? side : other(side)); // 번갈아 하는 동작의 지금 쪽
+
+// 엎드린 자세 기본 (얼굴이 바닥을 봄: 오른쪽 = +z, 서 있을 때와 같음)
+function prone(J, chestLift = 0) {
+  const P = V(0, 0.11, 0), u = V(Math.cos(chestLift * D), Math.sin(chestLift * D), 0);
+  trunk(J, P, u, ZR, V(1, -0.25 + chestLift / 60, 0));
+  for (const s of ['L', 'R']) {
+    const z = zs(s, 0.1), H = V(0, 0.11, z), A = V(-0.88, 0.08, z);
+    J[s + 'hip'] = H; J[s + 'knee'] = V(-0.44, 0.09, z); J[s + 'ankle'] = A;
+    J[s + 'heel'] = A.clone().add(V(0.02, 0.06, 0)); J[s + 'toe'] = A.clone().add(V(-0.13, -0.05, 0));
+  }
+  return J;
+}
+// 등을 대고 누운 자세 기본 (얼굴이 위: 오른쪽 = -z), 무릎 세우고 발바닥은 바닥
+const zb = (s, w) => (s === 'L' ? w : -w);
+function supineKnees(J, hipY = 0.12) {
+  const H0 = V(0, hipY, 0), sx = Math.sqrt(Math.max(0, LEN.torso ** 2 - (hipY - 0.13) ** 2));
+  trunk(J, H0, V(sx, 0.13 - hipY, 0).normalize(), V(0, 0, -1), V(1, 0.15, 0));
+  for (const s of ['L', 'R']) {
+    const z = zb(s, 0.1), A = V(-0.5, 0.08, zb(s, 0.13));
+    J[s + 'hip'] = V(0, hipY, z); J[s + 'ankle'] = A; J[s + 'knee'] = ik(J[s + 'hip'], A, LEN.thigh, LEN.shin, V(0, 1, 0));
+    J[s + 'heel'] = A.clone().add(V(0.05, -0.05, 0)); J[s + 'toe'] = A.clone().add(V(-0.16, -0.06, 0));
+  }
+  for (const s of ['L', 'R']) armTo(J, s, J[s + 'shoulder'].clone().add(V(-0.52, -0.08, zb(s, 0.05))).setY(0.05), V(0, 1, 0));
+  return J;
+}
+// 앞으로 엎드린 일직선 (어깨 C, 발목 높이 ay) — 플랭크·마운틴 클라이머
+function plankLine(J, C, ay, knees = false) {
+  const len = LEN.torso + (knees ? LEN.thigh : LEN.thigh + LEN.shin), dy = C.y - ay, u = V(-Math.sqrt(Math.max(0.01, len * len - dy * dy)), -dy, 0).normalize();
+  J.chest = C; J.pelvis = C.clone().add(u.clone().multiplyScalar(LEN.torso));
+  J.Lshoulder = C.clone().add(V(0, 0, -0.19)); J.Rshoulder = C.clone().add(V(0, 0, 0.19));
+  head(J, C.clone().add(u.clone().multiplyScalar(-0.05)), u.clone().multiplyScalar(-1).add(V(0, -0.35, 0)).normalize());
+  for (const s of ['L', 'R']) {
+    const z = zs(s, 0.1), H = J.pelvis.clone().setZ(z), K = H.clone().add(u.clone().multiplyScalar(LEN.thigh));
+    J[s + 'hip'] = H; J[s + 'knee'] = K;
+    if (knees) { const A = V(K.x - LEN.shin, 0.07, z); J[s + 'ankle'] = A; J[s + 'heel'] = A.clone().add(V(0.02, 0.06, 0)); J[s + 'toe'] = A.clone().add(V(-0.14, -0.04, 0)); }
+    else { const A = K.clone().add(u.clone().multiplyScalar(LEN.shin)); J[s + 'ankle'] = A; J[s + 'heel'] = A.clone().add(V(-0.05, 0.04, 0)); J[s + 'toe'] = A.clone().add(V(0.05, -0.1, 0)); }
+  }
+  return u;
+}
+// 옆으로 버티는 자세: down = 바닥 쪽 팔. 오른쪽이 아래면 가슴이 -z를 봄
+function sidePlank(down, knees, lift) {
+  const J = {}, U = knees ? V(0.923, 0.385, 0).normalize() : V(0.962, 0.271, 0).normalize(); // 머리 쪽 방향
+  const dn = V(U.y, -U.x, 0); // 몸의 바닥 쪽 축
+  const R = down === 'R' ? dn : dn.clone().multiplyScalar(-1), F = U.clone().cross(R); // F: 가슴이 보는 쪽
+  const E = V(0.05, 0.06, 0), Sb = E.clone().add(V(0, LEN.upper, 0)), C = Sb.clone().sub(dn.clone().multiplyScalar(0.19));
+  J.chest = C; J.Lshoulder = C.clone().add(R.clone().multiplyScalar(-0.19)); J.Rshoulder = C.clone().add(R.clone().multiplyScalar(0.19));
+  const Pl = C.clone().sub(U.clone().multiplyScalar(LEN.torso)).add(V(0, -0.22 * (1 - lift), 0)); // 처음엔 엉덩이가 바닥 가까이
+  J.pelvis = Pl;
+  head(J, C.clone().add(U.clone().multiplyScalar(0.05)), U);
+  for (const s of ['L', 'R']) {
+    J[s + 'hip'] = Pl.clone().add(R.clone().multiplyScalar(s === 'R' ? 0.1 : -0.1));
+    const straight = C.clone().sub(U.clone().multiplyScalar(LEN.torso + LEN.thigh)).add(R.clone().multiplyScalar(s === 'R' ? 0.1 : -0.1));
+    if (knees) {
+      const K = straight; J[s + 'knee'] = K; const A = K.clone().add(F.clone().multiplyScalar(-LEN.shin)); J[s + 'ankle'] = A;
+      J[s + 'heel'] = A.clone().add(U.clone().multiplyScalar(0.05)); J[s + 'toe'] = A.clone().add(U.clone().multiplyScalar(-0.14));
+    } else {
+      const A = C.clone().sub(U.clone().multiplyScalar(LEN.torso + LEN.thigh + LEN.shin)).add(R.clone().multiplyScalar(s === 'R' ? 0.1 : -0.1));
+      J[s + 'ankle'] = A; J[s + 'knee'] = J[s + 'hip'].clone().lerp(A, 0.5);
+      J[s + 'heel'] = A.clone().add(F.clone().multiplyScalar(-0.05)); J[s + 'toe'] = A.clone().add(F.clone().multiplyScalar(0.15));
+    }
+  }
+  const dS = down, uS = other(down);
+  J[dS + 'elbow'] = E; J[dS + 'wrist'] = E.clone().add(F.clone().multiplyScalar(0.25)).setY(0.05);
+  armTo(J, uS, J[uS + 'hip'].clone().add(U.clone().multiplyScalar(0.12)).add(F.clone().multiplyScalar(0.06)), U.clone().multiplyScalar(-0.3).add(R.clone().multiplyScalar(down === 'R' ? -1 : 1)));
+  return J;
+}
+// 서서 정면 쪽(좌우)으로 팔 들기: a° (0 = 아래, 180 = 머리 위)
+function armSide(J, s, a) { const Sh = J[s + 'shoulder'], d = V(0, -cs(a), zs(s, sn(a))); J[s + 'elbow'] = Sh.clone().add(d.clone().multiplyScalar(LEN.upper)); J[s + 'wrist'] = Sh.clone().add(d.clone().multiplyScalar(LEN.upper + LEN.fore)); }
+function standJ(P = V(0, 0.96, 0), lean = 0) {
+  const J = {}, u = V(sn(lean), cs(lean), 0);
+  trunk(J, P, u, ZR, u);
+  for (const s of ['L', 'R']) legTo(J, s, P.clone().setZ(zs(s, 0.1)), V(P.x + 0.0, 0.08, zs(s, 0.1)), V(1, 0, 0));
+  return J;
+}
+
+Object.assign(MOVES, {
+  // 의자에 앉았다 일어서기: 엉덩이가 의자에 살짝 닿으면 바로 일어남
+  chairsquat(t) {
+    const p = 0.82 * rep(t, 3.4), J = POSE.squat(p);
+    J.chairX = POSE.squat(0.82).pelvis.x - 0.16; return J;
+  },
+  // 점프 스쿼트: 반쯤 앉았다가 뛰어오르고 무릎을 굽혀 부드럽게 착지
+  jumpsquat(t) {
+    const x = (t % 1.8) / 1.8;
+    if (x < 0.4) return POSE.squat(0.55 * ease(x / 0.4));
+    if (x < 0.62) { const J = POSE.squat(0.55 * (1 - ease((x - 0.4) / 0.08 > 1 ? 1 : (x - 0.4) / 0.08))); return shiftJ(J, V(0, 0.24 * Math.sin(Math.PI * (x - 0.4) / 0.22), 0)); }
+    return POSE.squat(0.35 * Math.sin(Math.PI * (x - 0.62) / 0.38));
+  },
+  // 제자리 런지(스플릿 스쿼트): side 다리가 앞, 뒤 무릎이 바닥 가까이까지 수직으로 내려감
+  splitsquat(t) {
+    const p = rep(t, 3.4), o = other(side), P = V(-0.12, lerp(0.92, 0.55, p), 0), J = {};
+    trunk(J, P, V(sn(4), cs(4), 0), ZR);
+    legTo(J, side, P.clone().setZ(zs(side, 0.1)), V(0.3, 0.08, zs(side, 0.12)), V(1, 0.1, 0));
+    legTo(J, o, P.clone().setZ(zs(o, 0.1)), V(-0.55, 0.14, zs(o, 0.12)), V(0.3, -1, 0), V(0.75, -0.66, 0));
+    handOnHip(J, 'L'); handOnHip(J, 'R'); J.hl = LEG_KEYS(side); return J;
+  },
+  // 뒤로 런지: side 다리가 앞에 남고 반대 다리를 뒤로 뻗어 내려앉음 (번갈아)
+  lunge(t) {
+    const s = ALT(t, 3.2), o = other(s), p = rep(t, 3.2, [0.1, 0.4, 0.15, 0.35]), back = Math.min(1, p * 1.5);
+    const P = V(lerp(0, -0.22, p), lerp(0.96, 0.53, p), 0), J = {};
+    trunk(J, P, V(sn(6 * p), cs(6 * p), 0), ZR);
+    legTo(J, s, P.clone().setZ(zs(s, 0.1)), V(0, 0.08, zs(s, 0.1)), V(1, 0, 0));
+    legTo(J, o, P.clone().setZ(zs(o, 0.1)), V(lerp(0, -0.75, back), 0.08 + 0.06 * back + 0.08 * Math.sin(Math.PI * back) * (p < 0.7 ? 1 : 0), zs(o, 0.1)), V(0.3, -1, 0), V(lerp(1, 0.75, back), lerp(0, -0.66, back), 0));
+    handOnHip(J, 'L'); handOnHip(J, 'R'); J.hl = LEG_KEYS(s); return J;
+  },
+  // 불가리안 스플릿 스쿼트: 뒷발 등을 의자에 올리고 앞다리로 앉았다 일어남
+  bulgarian(t) {
+    const p = rep(t, 3.6), o = other(side), P = V(lerp(-0.12, -0.2, p), lerp(0.93, 0.58, p), 0), J = {};
+    trunk(J, P, V(sn(8 + 6 * p), cs(8 + 6 * p), 0), ZR);
+    legTo(J, side, P.clone().setZ(zs(side, 0.1)), V(0.25, 0.08, zs(side, 0.12)), V(1, 0.1, 0));
+    legTo(J, o, P.clone().setZ(zs(o, 0.1)), V(-0.62, 0.5, zs(o, 0.1)), V(0.2, -1, 0), V(-1, 0, 0), V(0, -1, 0));
+    J[o + 'toe'] = J[o + 'ankle'].clone().add(V(-0.16, -0.02, 0)); J[o + 'heel'] = J[o + 'ankle'].clone().add(V(0.03, 0.05, 0));
+    handOnHip(J, 'L'); handOnHip(J, 'R'); J.chairX = -0.74; J.hl = LEG_KEYS(side); return J;
+  },
+  // 벽 앉기: 등을 벽에 대고 미끄러져 내려가 허벅지가 바닥과 평행하게 버팀
+  wallsit(t) {
+    const p = cyc(t, [0.6, 1.4, 3.5, 1.2]), P = V(-0.2, lerp(0.93, 0.52, p), 0), J = {};
+    trunk(J, P, V(0, 1, 0), ZR, V(1, 0, 0));
+    for (const s of ['L', 'R']) legTo(J, s, P.clone().setZ(zs(s, 0.11)), V(lerp(-0.05, 0.24, p), 0.08, zs(s, 0.13)), V(1, 0.2, 0));
+    for (const s of ['L', 'R']) arm(J, s, J[s + 'shoulder'], 8, 10);
+    J.wallX = -0.36; return J;
+  },
+  // 옆으로 런지: 발을 넓게 벌리고 side 쪽 무릎을 굽혀 엉덩이를 그쪽으로 (앞에서 보임)
+  sidelunge(t) {
+    const p = rep(t, 3.4), o = other(side), P = V(lerp(0, -0.16, p), lerp(0.9, 0.6, p), zs(side, 0.3 * p)), J = {};
+    trunk(J, P, V(sn(25 * p), cs(25 * p), 0), ZR);
+    legTo(J, side, P.clone().add(V(0, 0, zs(side, 0.1))), V(0, 0.08, zs(side, 0.48)), V(1, 0, zs(side, 0.3)));
+    legTo(J, o, P.clone().add(V(0, 0, zs(o, 0.1))), V(0, 0.08, zs(o, 0.42)), V(1, 0, 0));
+    for (const s of ['L', 'R']) armTo(J, s, J.chest.clone().add(V(0.25, -0.12, zs(s, 0.05))), V(0, -1, zs(s, 1)));
+    J.hl = LEG_KEYS(side); return J;
+  },
+  // 까치발 들기: 발끝으로 서서 뒤꿈치를 높이 들었다가 천천히 내림
+  calfraise(t) {
+    const h = 0.09 * rep(t, 2.4), J = standJ(V(0, 0.96 + h, 0));
+    for (const s of ['L', 'R']) {
+      const T = V(0.17, 0.02, zs(s, 0.1)), A = V(0, 0.08 + h, zs(s, 0.1));
+      J[s + 'ankle'] = A; J[s + 'knee'] = ik(J[s + 'hip'], A, LEN.thigh, LEN.shin, V(1, 0, 0)); J[s + 'toe'] = T;
+      J[s + 'heel'] = A.clone().add(A.clone().sub(T).normalize().multiplyScalar(0.07));
+    }
+    for (const s of ['L', 'R']) arm(J, s, J[s + 'shoulder'], 5, 5);
+    return J;
+  },
+  // 엉덩이 들기(브릿지): 누워서 무릎을 세우고, 엉덩이를 들어 어깨-엉덩이-무릎을 일직선으로
+  bridge(t) { return supineKnees({}, lerp(0.12, 0.42, rep(t, 3.6, [0.2, 0.35, 0.25, 0.35]))); },
+  // 한 다리 브릿지: side 다리는 쭉 펴서 들고, 반대 다리로 엉덩이를 들어 올림
+  slbridge(t) {
+    const p = rep(t, 3.6, [0.2, 0.35, 0.25, 0.35]), J = supineKnees({}, lerp(0.12, 0.4, p)), H = J[side + 'hip'];
+    const dir = H.clone().sub(J.chest).setZ(0).normalize(), A = H.clone().add(dir.multiplyScalar(LEN.thigh + LEN.shin)).add(V(0, 0.08, 0));
+    J[side + 'ankle'] = A; J[side + 'knee'] = H.clone().lerp(A, 0.5); J[side + 'heel'] = A.clone().add(V(0.0, -0.05, 0)); J[side + 'toe'] = A.clone().add(V(0.03, 0.15, 0));
+    J.hl = LEG_KEYS(other(side)); return J;
+  },
+  // 한 다리 루마니안 데드리프트: side 다리로 서서 상체를 숙이며 반대 다리를 뒤로 뻗어 일직선
+  slrdl(t) {
+    const p = rep(t, 3.8), o = other(side), lean = 72 * p, u = V(sn(lean), cs(lean), 0), P = V(lerp(0, -0.12, p), lerp(0.95, 0.9, p), 0), J = {};
+    trunk(J, P, u, ZR, V(sn(lean + 15), cs(lean + 15), 0));
+    legTo(J, side, P.clone().setZ(zs(side, 0.1)), V(0, 0.08, zs(side, 0.1)), V(1, 0, 0));
+    const H = P.clone().setZ(zs(o, 0.1)), A = H.clone().sub(u.clone().multiplyScalar(LEN.thigh + LEN.shin)).lerp(V(0, 0.08, zs(o, 0.1)), 1 - p);
+    J[o + 'hip'] = H; J[o + 'ankle'] = A; J[o + 'knee'] = H.clone().lerp(A, 0.5);
+    const fd = u.clone().multiplyScalar(-1).lerp(V(1, 0, 0), 1 - p).normalize().multiplyScalar(-1);
+    J[o + 'toe'] = A.clone().add(V(0, -1, 0).lerp(V(1, 0, 0), 1 - p).normalize().multiplyScalar(0.16)); J[o + 'heel'] = A.clone().add(fd.multiplyScalar(-0.0)).add(V(-0.05, 0.03, 0));
+    for (const s of ['L', 'R']) J[s + 'shoulder'] && armTo(J, s, J[s + 'shoulder'].clone().add(V(0.02, -0.55, 0)), V(-1, 0, 0));
+    J.hl = LEG_KEYS(side); return J;
+  },
+  // 의자 딥스: 의자 끝을 손으로 짚고 무릎은 90°, 팔꿈치를 뒤로 굽혀 엉덩이를 내렸다 올림
+  chairdip(t) {
+    const p = rep(t, 3.2), C = V(-0.14, lerp(1.02, 0.72, p), 0), J = {};
+    J.chest = C; J.pelvis = C.clone().add(V(0.07, -LEN.torso + 0.01, 0));
+    J.Lshoulder = C.clone().add(V(0, 0, -0.19)); J.Rshoulder = C.clone().add(V(0, 0, 0.19));
+    head(J, C.clone().add(V(0, 0.05, 0)), V(0.3, 1, 0));
+    for (const s of ['L', 'R']) { armTo(J, s, V(-0.27, 0.48, zs(s, 0.17)), V(-1, 0, 0)); legTo(J, s, J.pelvis.clone().setZ(zs(s, 0.1)), V(0.42, 0.08, zs(s, 0.12)), V(0.2, 1, 0)); }
+    J.chairX = -0.48; return J;
+  },
+  // 파이크 푸시업: 엉덩이를 높이 든 ㅅ자 자세에서 머리를 손 사이 바닥 쪽으로 내렸다 밀어 올림 (어깨 운동)
+  pikepush(t) {
+    const p = rep(t, 3), H = V(-0.1, 0.9, 0), J = {};
+    const target = V(lerp(0.12, 0.3, p), lerp(0.62, 0.36, p), 0), C = H.clone().add(target.clone().sub(H).normalize().multiplyScalar(LEN.torso));
+    J.pelvis = H; J.chest = C; J.Lshoulder = C.clone().add(V(0, 0, -0.19)); J.Rshoulder = C.clone().add(V(0, 0, 0.19));
+    head(J, C.clone().add(C.clone().sub(H).normalize().multiplyScalar(0.05)), C.clone().sub(H).normalize());
+    for (const s of ['L', 'R']) {
+      armTo(J, s, V(0.45, 0.04, zs(s, 0.24)), V(-1, 0.3, zs(s, 0.6)));
+      const A = V(-0.48, 0.12, zs(s, 0.1)); J[s + 'hip'] = H.clone().setZ(zs(s, 0.1)); J[s + 'ankle'] = A; J[s + 'knee'] = J[s + 'hip'].clone().lerp(A, 0.5);
+      J[s + 'heel'] = A.clone().add(V(-0.05, 0.04, 0)); J[s + 'toe'] = A.clone().add(V(0.1, -0.1, 0));
+    }
+    return J;
+  },
+  // 엎드려 Y자 팔 들기: 엄지를 위로, 팔을 Y자로 뻗어 가슴과 팔을 살짝 들어 등 위쪽에 힘
+  yraise(t) {
+    const p = rep(t, 3), J = prone({}, 10 * p);
+    for (const s of ['L', 'R']) { const d = V(0.8, lerp(-0.12, 0.35, p), zs(s, 0.55)).normalize(); J[s + 'wrist'] = J[s + 'shoulder'].clone().add(d.clone().multiplyScalar(LEN.upper + LEN.fore)); J[s + 'wrist'].y = Math.max(0.05, J[s + 'wrist'].y); J[s + 'elbow'] = J[s + 'shoulder'].clone().lerp(J[s + 'wrist'], 0.52); }
+    return J;
+  },
+  // 엎드려 W자 당기기: 팔꿈치를 굽혀 옆구리 쪽으로 당기며 날개뼈를 모음
+  wraise(t) {
+    const p = rep(t, 3), J = prone({}, 8 * p);
+    for (const s of ['L', 'R']) { const Sh = J[s + 'shoulder'], E = Sh.clone().add(V(-0.12, lerp(-0.06, 0.12, p), zs(s, 0.26))); E.y = Math.max(0.05, E.y); J[s + 'elbow'] = E; J[s + 'wrist'] = E.clone().add(V(0.25, 0.04, zs(s, 0.06))); J[s + 'wrist'].y = Math.max(0.05, J[s + 'wrist'].y); }
+    return J;
+  },
+  // 슈퍼맨: 엎드려 팔을 앞으로 뻗고 팔·가슴·다리를 함께 살짝 들어 2초 버팀
+  superman(t) {
+    const p = cyc(t, [0.4, 0.8, 1.6, 0.8]), J = prone({}, 12 * p);
+    for (const s of ['L', 'R']) {
+      const d = V(0.95, lerp(-0.1, 0.25, p), zs(s, 0.12)).normalize(); J[s + 'wrist'] = J[s + 'shoulder'].clone().add(d.multiplyScalar(LEN.upper + LEN.fore)); J[s + 'wrist'].y = Math.max(0.05, J[s + 'wrist'].y); J[s + 'elbow'] = J[s + 'shoulder'].clone().lerp(J[s + 'wrist'], 0.52);
+      const lift = 0.16 * p; J[s + 'knee'].y += lift * 0.5; J[s + 'ankle'].y += lift; J[s + 'heel'].y += lift; J[s + 'toe'].y += lift;
+    }
+    return J;
+  },
+  // 무릎 대고 플랭크: 팔꿈치는 어깨 아래, 어깨-엉덩이-무릎 일직선
+  kneeplank(t) {
+    const p = cyc(t, [0.5, 1.0, 4, 0.9]), J = {};
+    plankLine(J, V(0.05, 0.36, 0), 0.07, true);
+    J.pelvis.y = lerp(0.16, J.pelvis.y, p); for (const s of ['L', 'R']) J[s + 'hip'].y = J.pelvis.y;
+    for (const s of ['L', 'R']) { J[s + 'elbow'] = V(0.05, 0.06, zs(s, 0.17)); J[s + 'wrist'] = V(0.31, 0.05, zs(s, 0.12)); }
+    return J;
+  },
+  // 플랭크: 무릎을 펴서 머리부터 발뒤꿈치까지 일직선으로 버팀
+  plank(t) {
+    const p = cyc(t, [0.5, 1.0, 4, 0.9]), K = {}, F = {};
+    plankLine(K, V(0.05, 0.36, 0), 0.07, true); plankLine(F, V(0.05, 0.36, 0), 0.1, false);
+    const J = mixJ(K, F, p);
+    for (const s of ['L', 'R']) { J[s + 'elbow'] = V(0.05, 0.06, zs(s, 0.17)); J[s + 'wrist'] = V(0.31, 0.05, zs(s, 0.12)); }
+    return J;
+  },
+  // 마운틴 클라이머: 팔을 편 플랭크에서 무릎을 가슴 쪽으로 번갈아 빠르게 당김
+  mountain(t) {
+    const J = {}, u = plankLine(J, V(0.3, 0.6, 0), 0.12, false);
+    for (const s of ['L', 'R']) armTo(J, s, V(0.3, 0.04, zs(s, 0.2)), V(-1, 0, 0));
+    const ph = Math.sin(2 * Math.PI * t / 0.9);
+    for (const s of ['L', 'R']) {
+      const q = Math.max(0, s === 'R' ? ph : -ph); if (q <= 0) continue;
+      const H = J[s + 'hip'], K = H.clone().add(V(0.42, -0.14, 0).normalize().multiplyScalar(LEN.thigh)).lerp(J[s + 'knee'], 1 - q);
+      const A = K.clone().add(V(-0.75, -0.66, 0).normalize().multiplyScalar(LEN.shin)).lerp(J[s + 'ankle'], 1 - q);
+      J[s + 'knee'] = K; J[s + 'ankle'] = A; J[s + 'heel'] = A.clone().add(V(-0.05, 0.04, 0)); J[s + 'toe'] = A.clone().add(V(0.06, -0.1, 0));
+    }
+    return J;
+  },
+  // 무릎 대고 옆으로 버티기 / 옆으로 버티기: side 팔꿈치를 바닥에, 엉덩이를 들어 일직선
+  sideplankknee(t) { const J = sidePlank(side, true, cyc(t, [0.5, 1.0, 4, 0.9])); J.hl = [side + 'shoulder', side + 'elbow']; return J; },
+  sideplank(t) { const J = sidePlank(side, false, cyc(t, [0.5, 1.0, 4, 0.9])); J.hl = [side + 'shoulder', side + 'elbow']; return J; },
+  // 버드독: 네발 자세에서 한쪽 팔과 반대쪽 다리를 바닥과 평행하게 뻗어 2초 버팀 (번갈아)
+  birddog(t) {
+    const s = ALT(t, 3.4), o = other(s), p = cyc(t % 3.4, [0.3, 1.0, 1.4, 0.7]), J = {}, Sh = V(0, 0.605, 0), hipY = 0.5, hipX = -Math.sqrt(LEN.torso ** 2 - (Sh.y - hipY) ** 2);
+    kneeling(J, hipX, hipY, hipX);
+    J.pelvis = V(hipX, hipY, 0); J.chest = Sh;
+    for (const k of ['L', 'R']) { J[k + 'shoulder'] = Sh.clone().add(V(0, 0, zs(k, 0.19))); J[k + 'wrist'] = V(0.02, 0.04, zs(k, 0.2)); J[k + 'elbow'] = J[k + 'shoulder'].clone().lerp(J[k + 'wrist'], 0.52); }
+    head(J, Sh.clone().add(V(0.05, 0, 0)), V(1, -0.5, 0).normalize());
+    const W = J[s + 'shoulder'].clone().add(V(LEN.upper + LEN.fore, 0.02, 0)); J[s + 'wrist'] = J[s + 'wrist'].clone().lerp(W, p); J[s + 'elbow'] = J[s + 'shoulder'].clone().lerp(J[s + 'wrist'], 0.52);
+    const H = J[o + 'hip'], A = H.clone().add(V(-(LEN.thigh + LEN.shin), 0.02, 0));
+    J[o + 'knee'] = J[o + 'knee'].clone().lerp(H.clone().lerp(A, 0.5), p); J[o + 'ankle'] = J[o + 'ankle'].clone().lerp(A, p);
+    J[o + 'heel'] = J[o + 'heel'].clone().lerp(A.clone().add(V(-0.05, 0.04, 0)), p); J[o + 'toe'] = J[o + 'toe'].clone().lerp(A.clone().add(V(0.02, -0.14, 0)), p);
+    J.hl = [s + 'shoulder', s + 'elbow', ...LEG_KEYS(o)]; return J;
+  },
+  // 데드버그: 누워서 팔은 천장, 무릎은 90°. 허리를 바닥에 붙인 채 반대쪽 팔·다리를 천천히 뻗음 (번갈아)
+  deadbug(t) {
+    const s = ALT(t, 3.4), o = other(s), p = cyc(t % 3.4, [0.3, 1.2, 0.8, 1.1]), J = {};
+    trunk(J, V(0, 0.12, 0), V(1, 0.02, 0).normalize(), V(0, 0, -1), V(0.2, 1, 0));
+    for (const k of ['L', 'R']) {
+      const H = V(0, 0.12, zb(k, 0.1)), K = H.clone().add(V(0.02, LEN.thigh, 0)), A = K.clone().add(V(-LEN.shin, 0, 0));
+      J[k + 'hip'] = H; J[k + 'knee'] = K; J[k + 'ankle'] = A; J[k + 'heel'] = A.clone().add(V(0, -0.06, 0)); J[k + 'toe'] = A.clone().add(V(0, 0.15, 0));
+      J[k + 'wrist'] = J[k + 'shoulder'].clone().add(V(0, LEN.upper + LEN.fore, 0)); J[k + 'elbow'] = J[k + 'shoulder'].clone().lerp(J[k + 'wrist'], 0.52);
+    }
+    const Wd = J[s + 'shoulder'].clone().add(V(LEN.upper + LEN.fore - 0.03, 0.1, 0)); J[s + 'wrist'] = J[s + 'wrist'].clone().lerp(Wd, p); J[s + 'elbow'] = J[s + 'shoulder'].clone().lerp(J[s + 'wrist'], 0.52);
+    const H = J[o + 'hip'], A = H.clone().add(V(-(LEN.thigh + LEN.shin) + 0.02, 0.12, 0));
+    J[o + 'knee'] = J[o + 'knee'].clone().lerp(H.clone().lerp(A, 0.5), p); J[o + 'ankle'] = J[o + 'ankle'].clone().lerp(A, p);
+    J[o + 'heel'] = J[o + 'ankle'].clone().add(V(0.0, -0.06, 0)); J[o + 'toe'] = J[o + 'ankle'].clone().add(V(-0.04, 0.15, 0).lerp(V(0, 0.15, 0), 1 - p));
+    J.hl = [s + 'shoulder', s + 'elbow', ...LEG_KEYS(o)]; return J;
+  },
+  // 컬업: 무릎 세우고 누워 손은 가슴에, 머리와 어깨만 살짝 들었다 내림 (허리는 바닥에)
+  curlup(t) {
+    const p = rep(t, 2.8), J = supineKnees({}, 0.12), ang = lerp(2, 24, p) * D, u = V(Math.cos(ang), Math.sin(ang), 0);
+    trunk(J, J.pelvis, u, V(0, 0, -1), V(0.4 + 0.3 * p, 1, 0));
+    for (const k of ['L', 'R']) armTo(J, k, J.chest.clone().add(V(-0.1, 0.1, zb(k, -0.08))), V(0, 1, zb(k, 1)));
+    return J;
+  },
+  // 스텝 잭: 뛰지 않고 한 발씩 옆으로 내딛으며 팔을 머리 위로 (앞에서 보임)
+  stepjack(t) {
+    const x = (t % 2.4) / 2.4, s = x < 0.5 ? 'R' : 'L', p = Math.sin(Math.PI * ((x % 0.5) / 0.5)), J = standJ();
+    legTo(J, s, J[s + 'hip'], V(0, 0.08, zs(s, 0.1 + 0.32 * p)), V(1, 0, 0));
+    for (const k of ['L', 'R']) armSide(J, k, lerp(8, 165, p));
+    return J;
+  },
+  // 팔 벌려 뛰기: 두 발을 동시에 벌리며 팔을 머리 위로, 가볍게 뛰어오름
+  jumpingjack(t) {
+    const x = (t % 1.0) / 1.0, p = Math.sin(Math.PI * x), J = standJ(V(0, 0.95, 0));
+    for (const k of ['L', 'R']) { legTo(J, k, J[k + 'hip'], V(0, 0.08, zs(k, 0.1 + 0.3 * p)), V(1, 0, 0)); armSide(J, k, lerp(8, 170, p)); }
+    return shiftJ(J, V(0, 0.07 * Math.abs(Math.sin(2 * Math.PI * x)), 0));
+  },
+  // 제자리 무릎 높이 뛰기: 무릎을 허리 높이까지 번갈아 들며 빠르게
+  highknees(t) { const J = MOVES.march(t, 1.25, 0.6); return shiftJ(J, V(0, 0.05 * Math.abs(Math.sin(2 * Math.PI * t / 0.6)), 0)); },
+  // 버피: 앉아 손 짚기 → 다리를 뒤로 뻗어 플랭크 → 다리 당기기 → 일어나 가볍게 점프
+  burpee(t) {
+    const S = standJ(), Q = POSE.squat(1), Pk = {}, Up = shiftJ(standJ(), V(0, 0.18, 0));
+    for (const k of ['L', 'R']) { armTo(Q, k, V(0.42, 0.04, zs(k, 0.2)), V(1, 0, 0)); arm(S, k, S[k + 'shoulder'], 5, 5); armSide(Up, k, 170); }
+    plankLine(Pk, V(0.42, 0.6, 0), 0.12, false); for (const k of ['L', 'R']) armTo(Pk, k, V(0.42, 0.04, zs(k, 0.2)), V(-1, 0, 0));
+    const keys = [[S, 0.3], [Q, 0.5], [Pk, 0.6], [Q, 0.5], [S, 0.35], [Up, 0.35]];
+    const total = keys.reduce((a, k) => a + k[1], 0); let x = t % total, i = 0;
+    while (x > keys[i][1]) { x -= keys[i][1]; i++; }
+    const A = keys[i][0], B = keys[(i + 1) % keys.length][0];
+    return mixJ(A, B, ease(Math.min(1, x / keys[i][1])));
+  },
+});
+
+FLOOR_MOVES.push('bridge', 'slbridge', 'yraise', 'wraise', 'superman', 'kneeplank', 'plank', 'mountain', 'sideplankknee', 'sideplank', 'birddog', 'deadbug', 'curlup', 'pikepush');
+const FRONT_VIEW = ['sidelunge', 'stepjack', 'jumpingjack']; // 옆으로 움직이는 동작은 앞쪽에서 비스듬히
+
 
 // 동작 시간(초): 시작 정지 → 내려가기 → 바닥 정지 → 올라오기
 const TIMING = { squat: [0.6, 2.0, 0.4, 1.4], goodmorning: [0.6, 2.2, 0.4, 1.5], pushup: [0.6, 1.6, 0.3, 1.1] };
@@ -393,6 +723,12 @@ const JR = { knee: 0.058, elbow: 0.045, ankle: 0.045, shoulder: 0.065, hip: 0.08
 const wall = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.2, 1.6), new THREE.MeshStandardMaterial({ color: 0xD5DBE6, roughness: 1 }));
 wall.position.y = 1.1; wall.receiveShadow = true; scene.add(wall);
 const hlMat = new THREE.MeshStandardMaterial({ color: 0x5B8CFF, roughness: 0.5 });
+// 의자 (앉았다 일어서기·딥스·불가리안 스쿼트용): 높이 45cm 상자 + 등받이
+const chair = new THREE.Group();
+{ const m = new THREE.MeshStandardMaterial({ color: 0xC8B79E, roughness: 0.9 });
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.45, 0.44), m); seat.position.y = 0.225; seat.castShadow = seat.receiveShadow = true; chair.add(seat);
+  const backr = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.42, 0.44), m); backr.position.set(-0.19, 0.66, 0); backr.castShadow = true; chair.add(backr); }
+scene.add(chair);
 function pose(J) {
   if (!J.spine) J.spine = J.pelvis.clone().add(J.chest).multiplyScalar(0.5);
   wall.visible = J.wallX != null || J.wallZ != null;
@@ -400,6 +736,7 @@ function pose(J) {
     wall.rotation.y = Math.PI / 2; wall.scale.set(1, 1, 0.16); wall.position.set(J.wallX || 0, 1.1, J.wallZ + Math.sign(J.wallZ) * 0.03);
     const near = J.wallZ > 0; wall.material.transparent = near; wall.material.opacity = near ? 0.25 : 1; wall.material.depthWrite = !near;
   } else if (wall.visible) { wall.rotation.y = 0; wall.scale.set(1, 1, 1); wall.position.set(J.wallX + 0.03, 1.1, 0); wall.material.transparent = false; wall.material.opacity = 1; wall.material.depthWrite = true; }
+  chair.visible = J.chairX != null; if (chair.visible) { chair.position.x = J.chairX; }
   for (const { a, b, m } of parts) { place(m, J[a], J[b]); m.material = J.hl && J.hl.includes(a) ? hlMat : skin; } // 움직이는 쪽 다리를 파랗게
   for (const { k, m } of jointMeshes) { m.position.copy(J[k]); m.scale.setScalar(JR[k.slice(1)]); }
   headMesh.position.copy(J.head);
@@ -412,10 +749,15 @@ function pose(J) {
 }
 
 // 카메라: 끌어서 돌리기 + 보기 버튼
-const FOCUS = { squat: [V(0.05, 0.82, 0), 4.3], goodmorning: [V(0.05, 0.82, 0), 4.3], pushup: [V(-0.6, 0.3, 0), 3.6] };
+const FOCUS = { squat: [V(0.05, 0.82, 0), 4.3], goodmorning: [V(0.05, 0.82, 0), 4.3], pushup: [V(-0.6, 0.3, 0), 3.6],
+  plank: [V(-0.5, 0.25, 0), 3.4], kneeplank: [V(-0.35, 0.25, 0), 3.2], mountain: [V(-0.3, 0.35, 0), 3.4], sideplank: [V(-0.5, 0.35, 0), 3.4], sideplankknee: [V(-0.35, 0.35, 0), 3.2],
+  bridge: [V(0.05, 0.25, 0), 3.2], slbridge: [V(0.0, 0.3, 0), 3.4], curlup: [V(0.05, 0.25, 0), 3.2], deadbug: [V(0.0, 0.35, 0), 3.4],
+  yraise: [V(0.0, 0.2, 0), 3.4], wraise: [V(0.0, 0.2, 0), 3.4], superman: [V(0.0, 0.2, 0), 3.5], birddog: [V(-0.15, 0.4, 0), 3.5], pikepush: [V(0.0, 0.5, 0), 3.6],
+  chairsquat: [V(-0.05, 0.75, 0), 4.3], chairdip: [V(-0.05, 0.6, 0), 3.8], bulgarian: [V(-0.2, 0.75, 0), 4.3], lunge: [V(-0.2, 0.8, 0), 4.3], splitsquat: [V(-0.1, 0.8, 0), 4.3],
+  slrdl: [V(-0.1, 0.8, 0), 4.3], burpee: [V(-0.15, 0.6, 0), 4.3], wallsit: [V(0.0, 0.75, 0), 4.2] };
 const VIEWS = { side: [0, 6], angle: [38, 14], front: [90, 8] };
 let az = 0, el = 6;
-function setView(v) { view = v; [az, el] = VIEWS[v]; if (ex === 'pushup' && v === 'front') { az = 25; el = 62; } if (MOVES[ex] && v === 'side') { az = FLOOR_MOVES.includes(ex) ? 24 : FRONT_WALL.includes(ex) ? -24 : 28; el = FLOOR_MOVES.includes(ex) ? 16 : 9; } } // 왼쪽·오른쪽 모두 같은 방향에서 보여 줌
+function setView(v) { view = v; [az, el] = VIEWS[v]; if (ex === 'pushup' && v === 'front') { az = 25; el = 62; } if (MOVES[ex] && v === 'side') { az = FLOOR_MOVES.includes(ex) ? 24 : FRONT_WALL.includes(ex) ? -24 : FRONT_VIEW.includes(ex) ? 62 : 28; el = FLOOR_MOVES.includes(ex) ? 16 : 9; } } // 왼쪽·오른쪽 모두 같은 방향에서 보여 줌
 function placeCamera() {
   const [c, r] = FOCUS[ex] || (FLOOR_MOVES.includes(ex) ? [V(-0.15, 0.32, 0), 3.5] : ex === 'wallpush' ? [V(0.4, 0.85, 0), 4.4] : [V(0.12, 0.85, 0), 4.3]);
   const a = az * D, e = el * D;
