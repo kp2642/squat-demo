@@ -61,9 +61,10 @@ export const SLOTS = {
 // 요일 구성: 매번 하체(무릎) · 밀기 · 엉덩이 · 등 · 코어를 고르게. 주 2회는 A·B, 3회 이상은 A·B·C 순서로 돌아감
 // 체중 감량 목표는 끝에 짧은 유산소(cardio)를 붙임
 export const DAYS = {
+  // v39: 모든 종목을 카메라로 보니, 휴대폰 자리(서서 → 의자 → 바닥)가 덜 바뀌게 서서 하는 종목을 앞에 모음
   A: ['knee', 'push', 'hingeA', 'backA', 'coreA'],
-  B: ['lunge', 'push', 'hingeB', 'backB', 'coreB'],
-  C: ['legc', 'upper', 'hingeA', 'coreC', 'abs', 'calf'],
+  B: ['lunge', 'hingeB', 'push', 'backB', 'coreB'],
+  C: ['legc', 'calf', 'upper', 'hingeA', 'coreC', 'abs'],
 };
 export const exOf = (entry) => entry.split(':')[0];
 export const styleOf = (entry) => entry.split(':')[1] || null;
