@@ -759,11 +759,37 @@ const FOCUS = { squat: [V(0.05, 0.82, 0), 4.3], goodmorning: [V(0.05, 0.82, 0), 
 const VIEWS = { side: [0, 6], angle: [38, 14], front: [90, 8] };
 let az = 0, el = 6;
 function setView(v) { view = v; [az, el] = VIEWS[v]; if (ex === 'pushup' && v === 'front') { az = 25; el = 62; } if (MOVES[ex] && v === 'side') { az = FLOOR_MOVES.includes(ex) ? 24 : FRONT_WALL.includes(ex) ? -24 : FRONT_VIEW.includes(ex) ? 62 : 28; el = FLOOR_MOVES.includes(ex) ? 16 : 9; } } // 왼쪽·오른쪽 모두 같은 방향에서 보여 줌
-function placeCamera() {
-  const [c, r] = FOCUS[ex] || (FLOOR_MOVES.includes(ex) ? [V(-0.15, 0.32, 0), 3.5] : ex === 'wallpush' ? [V(0.4, 0.85, 0), 4.4] : [V(0.12, 0.85, 0), 4.3]);
+// v38: 동작마다 화면을 꽉 채우게 자동 맞춤 — 한 바퀴 동작의 관절(+의자·머리 둘레)을 모아, 보는 방향에서 화면의 약 84%를 차지하는 거리로
+let fit = { key: '', c: null, r: 4 };
+function fitPoints() {
+  const pts = [], add = (J) => {
+    for (const k of BODY_KEYS) if (J[k]) pts.push(J[k]);
+    if (J.head) for (const d of [V(0.17, 0, 0), V(-0.17, 0, 0), V(0, 0.17, 0), V(0, -0.17, 0), V(0, 0, 0.17), V(0, 0, -0.17)]) pts.push(J.head.clone().add(d));
+    if (J.chairX != null) for (const [x, y] of [[-0.21, 0], [0.21, 0], [-0.21, 0.87], [0.21, 0.45]]) pts.push(V(J.chairX + x, y, 0));
+  };
+  if (MOVES[ex]) for (let tt = 0; tt < 9; tt += 0.15) add(MOVES[ex](tt));
+  else for (let q = 0; q <= 1.0001; q += 0.1) add(POSE[ex](q));
+  return pts;
+}
+function placeAt(c, r) {
   const a = az * D, e = el * D;
   camera.position.set(c.x + r * Math.sin(a) * Math.cos(e), c.y + r * Math.sin(e), c.z + r * Math.cos(a) * Math.cos(e));
-  camera.lookAt(c);
+  camera.lookAt(c); camera.updateMatrixWorld();
+}
+function placeCamera() {
+  const key = [ex, side, back, pstyle, view, camera.aspect.toFixed(2)].join('|'); // 끌어서 돌릴 때는 거리를 그대로 둠
+  if (fit.key !== key) {
+    const pts = fitPoints(), lo = V(1e9, 1e9, 1e9), hi = V(-1e9, -1e9, -1e9);
+    pts.forEach(p => { lo.min(p); hi.max(p); });
+    const c = lo.clone().add(hi).multiplyScalar(0.5); let r = 4;
+    for (let i = 0; i < 4; i++) { // 투영해 보고 거리를 고침 (원근이라 몇 번 반복)
+      placeAt(c, r); let m = 0;
+      for (const p of pts) { const q = p.clone().project(camera); m = Math.max(m, Math.abs(q.x), Math.abs(q.y)); }
+      r *= Math.max(0.5, Math.min(2, m / 0.8));
+    }
+    fit = { key, c, r: Math.max(1.6, r) };
+  }
+  placeAt(fit.c, fit.r);
 }
 let drag = null;
 canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, az, el }; canvas.setPointerCapture(e.pointerId); $('hint').style.display = 'none'; });
