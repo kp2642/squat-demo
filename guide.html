@@ -382,7 +382,8 @@ function supineKnees(J, hipY = 0.12) {
     J[s + 'hip'] = V(0, hipY, z); J[s + 'ankle'] = A; J[s + 'knee'] = ik(J[s + 'hip'], A, LEN.thigh, LEN.shin, V(0, 1, 0));
     J[s + 'heel'] = A.clone().add(V(0.05, -0.05, 0)); J[s + 'toe'] = A.clone().add(V(-0.16, -0.06, 0));
   }
-  for (const s of ['L', 'R']) armTo(J, s, J[s + 'shoulder'].clone().add(V(-0.52, -0.08, zb(s, 0.05))).setY(0.05), V(0, 1, 0));
+  // 팔은 몸 옆 바닥에 쭉 펴서 손바닥을 바닥에 (팔꿈치를 굽히지 않음)
+  for (const s of ['L', 'R']) { const Sh = J[s + 'shoulder'], d = V(-0.96, 0, zb(s, 0.28)).normalize(), W = Sh.clone().add(d.multiplyScalar(LEN.upper + LEN.fore)).setY(0.05); J[s + 'wrist'] = W; J[s + 'elbow'] = Sh.clone().lerp(W, 0.53); }
   return J;
 }
 // 앞으로 엎드린 일직선 (어깨 C, 발목 높이 ay) — 플랭크·마운틴 클라이머
