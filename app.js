@@ -1,13 +1,13 @@
-import * as SQ from './squat-logic.js?v=40';
-import * as PL from './plan.js?v=40';
-import * as PU from './pushup-logic.js?v=40';
-import * as GM from './goodmorning-logic.js?v=40';
-import { NUM, WARMUP, COOLDOWN, PLACE, GX, PLACE_G, STYLE_NAME_, STYLE_NAME, GOAL_NAME, RPE, PARQ, SIDE_KO, iyeyo } from './data-ko.js?v=40';
-import { makeExercises, JUDGED3 } from './exercises.js?v=40';
-import * as MV from './move-logic.js?v=40';
+import * as SQ from './squat-logic.js?v=41';
+import * as PL from './plan.js?v=41';
+import * as PU from './pushup-logic.js?v=41';
+import * as GM from './goodmorning-logic.js?v=41';
+import { NUM, WARMUP, COOLDOWN, PLACE, GX, PLACE_G, STYLE_NAME_, STYLE_NAME, GOAL_NAME, RPE, PARQ, SIDE_KO, iyeyo } from './data-ko.js?v=41';
+import { makeExercises, JUDGED3 } from './exercises.js?v=41';
+import * as MV from './move-logic.js?v=41';
 
 const EXERCISES = makeExercises({ pstyle: () => pstyle, counter: () => counter });
-let exercise = 'squat', pstyle = 'knees', flow = 'single', session = null;
+let exercise = 'squat', pstyle = 'knees', flow = 'session', session = null;
 const EX = () => EXERCISES[exercise];
 let CUE_TEXT = SQ.CUE_TEXT, NOREP_TEXT = SQ.NOREP_TEXT;
 
@@ -437,7 +437,7 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EX().line(r)} / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `${EX().name} 데모 v40 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `${EX().name} 데모 v41 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
@@ -478,9 +478,9 @@ function renderPlan() {
   const items = buildPlan(), li = [];
   for (const it of items) {
     if (it.kind === 'timer') li.push(`<li><b>${it.title}</b><span>${fmt(it.steps.reduce((a, s) => a + s[2], 0))} · ${it.key === 'warmup' ? '걷기 + 동적 스트레칭' : '걷기 + 정적 스트레칭'}</span></li>`);
-    else if (it.set === 1) li.push(`<li><b>${exName(it.ex, it.style)}${EXERCISES[it.ex] ? '<span class="badge">카메라 판정</span>' : ''}</b><span>${it.of}세트 × ${fmtN(it.ex, it.reps)} · 휴식 ${it.rest}초</span></li>`);
+    else if (it.set === 1) li.push(`<li><b>${exName(it.ex, it.style)}${EXERCISES[it.ex] ? '' : '<span class="badge">음성 안내</span>'}</b><span>${it.of}세트 × ${fmtN(it.ex, it.reps)} · 휴식 ${it.rest}초</span></li>`);
   }
-  li.splice(1, 0, `<li><b>오늘 구성 ${todayWk}</b><span>${{ A: '스쿼트 · 엉덩이 들기 · 플랭크 위주', B: '런지 · 굿모닝 · 옆으로 버티기 위주', C: '벽 앉기·옆 런지 · 딥스 · 코어 위주' }[todayWk]}. 운동할 때마다 A → B${(store.plan || defaultPlan()).days >= 3 ? ' → C' : ''} 순서로 바뀌어요.</span></li>`);
+  li.splice(1, 0, `<li><b style="white-space:nowrap">오늘 구성 ${todayWk}</b><span>${{ A: '스쿼트 · 엉덩이 들기 · 플랭크 위주', B: '런지 · 굿모닝 · 옆으로 버티기 위주', C: '벽 앉기·옆 런지 · 딥스 · 코어 위주' }[todayWk]}. 운동할 때마다 A → B${(store.plan || defaultPlan()).days >= 3 ? ' → C' : ''} 순서로 바뀌어요.</span></li>`);
   $('planList').innerHTML = li.join('');
   // 빠른 체험일 때만 구성 고르기 (주 2회 플랜은 A·B만)
   const three = (store.plan || defaultPlan()).days >= 3;
@@ -520,8 +520,29 @@ function renderMyPlan() {
   $('histBox').innerHTML = h.length ? '<label class="lbl">최근 기록</label><div class="hist" style="margin-top:6px">' + h.map(x => {
     const d = new Date(x.at), reps = x.sets.filter(s => !(PL.EXDEF[s.ex] && isSec(s.ex))).reduce((a, s) => a + s.counted, 0), sc = x.sets.filter(s => s.avg != null), avg = sc.length ? Math.round(sc.reduce((a, s) => a + s.avg, 0) / sc.length) : null;
     return `<div><b>${d.getMonth() + 1}월 ${d.getDate()}일${x.quick ? ' · 빠른 체험' : ''}</b><span>${x.sets.length}세트 · ${reps}회${avg != null ? ' · 자세 ' + avg + '점' : ''}</span></div>`;
-  }).join('') + '</div>' : '';
+  }).join('') + '</div><button class="ghost" id="histAll" style="margin-top:8px">기록 전체 보기</button>' : '';
+  if ($('histAll')) $('histAll').onclick = () => { renderHistory(); show('history'); $('history').scrollTop = 0; };
 }
+// v41: 기록 화면 — 지금까지 한 운동을 달별로, 누르면 종목별 내용
+function renderHistory() {
+  const all = store.history, real = all.filter(x => !x.quick), c = PL.counts(all), mins = real.reduce((a, x) => a + (x.mins || 0), 0);
+  $('hStats').innerHTML = `<div class="stat"><span>운동한 날</span><b>${new Set(real.map(x => x.day)).size}일</b></div><div class="stat"><span>총 운동 시간</span><b>${mins >= 60 ? Math.floor(mins / 60) + '시간 ' + (mins % 60) + '분' : mins + '분'}</b></div><div class="stat"><span>이번 주</span><b>${c.thisWeek}회</b></div>`;
+  const ws = store.weights || [], wt = ws.length ? PL.weightTrend(ws, store.plan && store.plan.target) : null;
+  $('hWeight').innerHTML = wt && ws.length > 1 ? `<div class="card"><b>체중</b> ${ws[0].kg}kg → ${wt.now}kg (${wt.change > 0 ? '+' : ''}${wt.change}kg)<br><span class="note">${ws.slice(-6).map(w => `${+w.day.slice(5, 7)}/${+w.day.slice(8)} ${w.kg}`).join(' · ')}</span></div>` : '';
+  const WD = '일월화수목금토';
+  let mon = '', html = '';
+  for (const x of [...all].reverse()) {
+    const d = new Date(x.at), m = `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
+    if (m !== mon) { mon = m; html += `<div class="hmon">${m}</div>`; }
+    const byEx = {}; x.sets.forEach(s => { const k = s.ex + '|' + (s.style || ''); (byEx[k] = byEx[k] || []).push(s); });
+    const sc = x.sets.filter(s => s.avg != null), avg = sc.length ? Math.round(sc.reduce((a, s) => a + s.avg, 0) / sc.length) : null;
+    const rows = Object.values(byEx).map(ss => { const s0 = ss[0], tot = ss.reduce((a, s) => a + (s.counted || 0), 0), sa = ss.filter(s => s.avg != null), av = sa.length ? Math.round(sa.reduce((a, s) => a + s.avg, 0) / sa.length) : null;
+      return `<li><b>${exName(s0.ex, s0.style)}</b><span>${ss.length}세트 · ${tot}${PL.EXDEF[s0.ex] && isSec(s0.ex) ? '초' : '회'}${av != null ? ' · ' + av + '점' : ''}</span></li>`; }).join('');
+    html += `<details class="hday"><summary><b>${d.getMonth() + 1}월 ${d.getDate()}일 (${WD[d.getDay()]})</b><span>${x.quick ? '빠른 체험' : '구성 ' + (x.wk || '-')}${x.mins ? ' · ' + x.mins + '분' : ''} · ${x.sets.length}세트${avg != null ? ' · 자세 ' + avg + '점' : ''}</span></summary><ul>${rows || '<li><span>완료한 세트가 없어요</span></li>'}</ul></details>`;
+  }
+  $('hList').innerHTML = html || '<p class="note">아직 기록이 없어요.</p>';
+}
+$('hBack').onclick = () => show('intro');
 
 let setupAns = {};
 function openSetup() {
@@ -655,7 +676,7 @@ function showMove([, , , key, side, dir]) {
   const f = $('tPrev'); if (!key) { f.style.display = 'none'; return; }
   f.style.display = 'block';
   if (movesReady && f.contentWindow) f.contentWindow.postMessage({ type: 'move', ex: key, side, dir }, location.origin);
-  else f.src = `guide.html?v=40&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
+  else f.src = `guide.html?v=41&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
 }
 function runTimer(it) {
   show('timer');
@@ -694,7 +715,7 @@ $('gPrev').addEventListener('load', () => { gReady = true; });
 function gMove(ex, side) {
   const f = $('gPrev');
   if (gReady && f.contentWindow) f.contentWindow.postMessage({ type: 'move', ex, side }, location.origin);
-  else f.src = `guide.html?v=40&ex=${ex}&embed=1&nocap=1&side=${side}`;
+  else f.src = `guide.html?v=41&ex=${ex}&embed=1&nocap=1&side=${side}`;
 }
 function runGuided(it) {
   show('gset');
@@ -801,7 +822,7 @@ function showRest() {
   if (nx && nx.kind === 'set') {
     $('rNextT').textContent = `다음: ${exName(nx.ex, nx.style)} ${nx.set} / ${nx.of}세트 · ${fmtN(nx.ex, tgt(nx))}`;
     $('rPlace').textContent = changing ? placeOf(nx.ex) : '같은 자리에서 이어서 해요.';
-    const src = JUDGED3.includes(nx.ex) ? `guide.html?ex=${nx.ex}&embed=1${nx.ex === 'pushup' ? '&style=' + ((nx.style || pstyle) === 'full' ? 'full' : 'knees') : ''}` : `guide.html?v=40&ex=${nx.ex}&embed=1&nocap=1`;
+    const src = JUDGED3.includes(nx.ex) ? `guide.html?ex=${nx.ex}&embed=1${nx.ex === 'pushup' ? '&style=' + ((nx.style || pstyle) === 'full' ? 'full' : 'knees') : ''}` : `guide.html?v=41&ex=${nx.ex}&embed=1&nocap=1`;
     if ($('rPrev').getAttribute('src') !== src) $('rPrev').setAttribute('src', src);
     $('rPrev').style.display = 'block';
   } else { $('rNextT').textContent = '다음: 쿨다운 5분'; $('rPlace').textContent = '마지막 세트까지 끝났어요. 체감 강도를 누르고 쿨다운을 시작하세요.'; $('rPrev').style.display = 'none'; $('rPrev').removeAttribute('src'); }
@@ -889,7 +910,7 @@ function finishSession() {
 $('dHome').onclick = () => { session = null; show('intro'); $('startBtn').disabled = false; applyFlow(); };
 $('dCopy').onclick = async () => {
   const S = session; if (!S) return;
-  const lines = [`오늘의 운동 데모 v40 결과 [${mode}·구성 ${S.wk}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
+  const lines = [`오늘의 운동 데모 v41 결과 [${mode}·구성 ${S.wk}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
   for (const x of S.sets) {
     lines.push(`■ ${exName(x.ex, x.style)} ${x.set}/${x.of}세트 (목표 ${fmtN(x.ex, x.target)}, 체감 ${x.rpe ? RPE[x.rpe][0] : '-'})${x.guided ? ` · 음성 안내 · ${fmtN(x.ex, x.done)} 함` : ''}`);
     if (!x.guided) x.log.forEach(r => lines.push(`${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EXERCISES[x.ex].line(r)}`));
@@ -898,7 +919,19 @@ $('dCopy').onclick = async () => {
   setTimeout(() => $('dCopy').textContent = '결과 복사하기', 2000);
 };
 window.__session = { get: () => session, finish: finishSession, endSet: () => endSet(), sideDone: () => camSideDone(), counter: () => counter, endTimer: () => { if (tm) { tm.k = tm.it.steps.length; tm.left = 0; } } };
+// v41: 앱 화면 — 테스트 도구(종목 하나 테스트·수치 보기·결과 복사)는 켰을 때만 보임
+function applyDev() {
+  document.body.classList.toggle('dev', !!store.dev);
+  $('devBtn').textContent = store.dev ? '테스트 도구 끄기' : '테스트 도구 켜기';
+  if (!store.dev && flow !== 'session') { flow = 'session'; pick('flow', 'session'); }
+}
+$('devBtn').onclick = () => { store.dev = !store.dev; saveStore(); applyDev(); applyFlow(); };
+applyDev();
 applyFlow();
+// 처음 연 사람에게만 안내 화면
+$('wMake').onclick = () => { store.seen = 1; saveStore(); openSetup(); };
+$('wLater').onclick = () => { store.seen = 1; saveStore(); show('intro'); };
+if (!store.seen) { if (!store.plan && !store.history.length) show('welcome'); else { store.seen = 1; saveStore(); } }
 
 function fillVoices() {
   const sel = $('voiceSel'), vs = koVoices(), cur = koVoice();

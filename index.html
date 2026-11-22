@@ -8,15 +8,15 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="theme-color" content="#1E1E1E">
-<title>자세 코치 데모</title>
-<link rel="stylesheet" href="app.css?v=40">
+<title>AI 자세 코치</title>
+<link rel="stylesheet" href="app.css?v=41">
 </head>
 <body>
 
 <section id="intro" class="screen on">
-  <h1>자세 코치 데모 <small style="font-size:14px;color:#5F5F5F">v40</small></h1>
-  <div class="seg" id="flow" style="grid-template-columns:1fr 1fr">
-    <button data-v="single" class="sel">종목 하나 테스트</button><button data-v="session">오늘의 운동 (세션)</button>
+  <h1>AI 자세 코치</h1>
+  <div class="seg dev" id="flow" style="grid-template-columns:1fr 1fr">
+    <button data-v="single">종목 하나 테스트</button><button data-v="session" class="sel">오늘의 운동 (세션)</button>
   </div>
   <div id="sessionBox" style="display:none;flex-direction:column;gap:12px">
     <div id="myPlan"></div>
@@ -68,6 +68,7 @@
     </div>
     <p class="note" id="modeNote" style="margin:6px 0 0">편안한 깊이까지 앉으면 인정해요. 운동이 처음이거나 유연성이 부족하면 이걸로 시작하세요.</p>
   </div>
+  <details class="opts" id="opts"><summary>카메라·음성 설정</summary>
   <div>
     <label class="lbl">카메라</label>
     <div class="seg" id="cam" style="grid-template-columns:1fr 1fr 1fr">
@@ -83,10 +84,37 @@
     </div>
     <p class="note" style="margin:6px 0 0">더 자연스러운 목소리를 쓰려면 아이폰 설정 &gt; 손쉬운 사용 &gt; 읽기 및 말하기 &gt; 음성 &gt; 한국어에서 '고품질' 음성을 내려받은 뒤 이 화면을 새로고침하세요. ★ 표시가 고품질이에요.</p>
   </div>
-  <p class="note">통증이 느껴지면 바로 멈추세요. 이 데모는 의료·재활 목적이 아니에요. 처음 사용할 때 카메라 권한을 허용해 주세요.</p>
+  </details>
+  <p class="note">통증이 느껴지면 바로 멈추세요. 의료·재활 목적이 아니에요. 처음 사용할 때 카메라 권한을 허용해 주세요.</p>
   <div id="err"></div>
   <div style="flex:1"></div>
   <button class="primary" id="startBtn">시작하기</button>
+  <p class="foot">v41 · <button class="link" id="devBtn">테스트 도구 켜기</button></p>
+</section>
+
+<section id="welcome" class="screen light">
+  <div class="kicker">처음 오셨군요</div>
+  <h2>휴대폰을 세워 두면<br>AI 코치가 자세를 봐 드려요</h2>
+  <div class="wcards">
+    <div class="card"><b>📱 세워 두고 운동만</b><br>카메라가 옆모습을 보고 횟수를 세고, 자세가 무너지면 음성으로 바로 알려 줘요. 운동 중엔 휴대폰을 만질 필요가 없어요.</div>
+    <div class="card"><b>📋 나에게 맞춘 플랜</b><br>건강 확인과 몇 가지 질문으로 세트·횟수를 정하고, 운동할 때마다 체감 강도에 맞춰 다음 횟수를 조절해요.</div>
+    <div class="card"><b>🔒 영상은 휴대폰 안에서만</b><br>자세 인식은 이 휴대폰 안에서 처리하고, 영상과 신체 정보는 밖으로 보내지 않아요.</div>
+    <div class="card"><b>📐 놓는 위치</b><br>종목마다 1~2m 떨어진 바닥이나 허리 높이에 세워요. 시작 전에 어디에 둘지 화면과 음성으로 알려 드려요.</div>
+  </div>
+  <p class="note">통증이 느껴지면 바로 멈추세요. 의료·재활 목적이 아니에요.</p>
+  <div style="flex:1"></div>
+  <button class="primary" id="wMake">내 플랜 만들기 (약 1분)</button>
+  <button class="ghost" id="wLater">먼저 둘러볼게요</button>
+</section>
+
+<section id="history" class="screen light">
+  <div class="kicker">내 기록</div>
+  <h2>지금까지 한 운동</h2>
+  <div class="stats" id="hStats"></div>
+  <div id="hWeight"></div>
+  <div id="hList" style="display:flex;flex-direction:column;gap:10px"></div>
+  <div style="flex:1"></div>
+  <button class="primary" id="hBack">돌아가기</button>
 </section>
 
 <section id="live" class="screen">
@@ -97,7 +125,7 @@
       <div><div id="setChip" class="chip" style="display:none;margin-bottom:6px;width:max-content"></div><div id="count">0<small> / 12</small></div></div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         <span class="chip" id="voiceChip">음성 켜짐</span>
-        <button class="chip" id="dbgBtn" style="border:none">수치 보기</button>
+        <button class="chip dev" id="dbgBtn" style="border:none">수치 보기</button>
         <button class="chip" id="noCamBtn" style="border:none;display:none">카메라 없이 하기</button>
       </div>
     </div>
@@ -225,10 +253,10 @@
   </div>
   <div class="card" id="dNext"></div>
   <div style="flex:1"></div>
-  <button class="ghost" id="dCopy">결과 복사하기</button>
+  <button class="ghost dev" id="dCopy">결과 복사하기</button>
   <button class="primary" id="dHome">처음으로</button>
 </section>
 
-<script type="module" src="app.js?v=40"></script>
+<script type="module" src="app.js?v=41"></script>
 </body>
 </html>
