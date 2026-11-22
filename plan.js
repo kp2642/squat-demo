@@ -99,7 +99,41 @@ export function makePlan(p, today = new Date()) {
   return {
     v: 2, start: dayKey(monday(today)), days: p.days, goal: p.goal, level: p.level,
     mode: p.level === 'ge6' && !careful ? 'strict' : 'relaxed', cap: g.cap, careful, slots,
+    // v40: 장소(첫 버전은 집 맨몸만), 기간(4·8·12주), 목표 체중(선택), 체중 감량 강화(유산소 주 250분)
+    place: p.place || 'home', weeks: WEEKS.includes(p.weeks) ? p.weeks : 8, target: p.target || null, boost: !!p.boost,
   };
+}
+
+// ── v40: 기간과 목표 체중 ──
+export const WEEKS = [4, 8, 12];
+// 안전한 속도 (ACSM·대한비만학회 일반 권고): 감량은 주당 체중의 0.5~1%, 증량(근육 키우기)은 주당 0.25~0.5%
+export const RATE = { lossMax: 0.01, lossGood: 0.0075, gainMax: 0.005, gainGood: 0.0035, minBMI: 18.5 };
+// 목표 체중이 기간 안에 무리 없는지 확인. 돌려주는 값:
+//  ok: 무리 없음 / kind: 'loss' | 'gain' / perWeek: 주당 변화(kg) / pct: 체중 대비 % / needWeeks: 권장 속도로 걸리는 주
+//  extendTo: 늘리면 되는 기간(4·8·12주 중, 없으면 null) / safeTarget: 지금 기간에 맞는 목표 / lowBMI: 목표가 저체중(BMI 18.5 미만)
+export function goalCheck({ weight, height, target, weeks, goal }) {
+  if (!target || !weight || !weeks) return { ok: true, none: true };
+  const diff = target - weight, kind = diff < 0 ? 'loss' : 'gain', abs = Math.abs(diff);
+  const perWeek = abs / weeks, pct = perWeek / weight;
+  const max = kind === 'loss' ? RATE.lossMax : RATE.gainMax, good = kind === 'loss' ? RATE.lossGood : RATE.gainGood;
+  const needWeeks = Math.ceil(abs / (weight * good));
+  const extendTo = WEEKS.find(w => w >= weeks && abs / w / weight <= max) ?? null;
+  const safeTarget = Math[diff < 0 ? 'ceil' : 'floor']((weight + Math.sign(diff) * weight * max * weeks) * 2) / 2; // 0.5kg 단위, 늘 안전한 쪽으로 반올림
+  const lowBMI = height ? target / ((height / 100) ** 2) < RATE.minBMI : false;
+  const wrongWay = (goal === 'diet' && kind === 'gain') || (goal === 'muscle' && kind === 'loss' && abs > 0.5);
+  return { ok: pct <= max && !lowBMI && !wrongWay, kind, perWeek: Math.round(perWeek * 100) / 100, pct: Math.round(pct * 1000) / 10, needWeeks, extendTo, safeTarget, lowBMI, wrongWay };
+}
+// 플랜 진행: 몇 주 중 몇 주차, 끝났는지
+export function planSpan(plan, today = new Date()) {
+  const { week } = weekInfo(plan, today), weeks = plan.weeks || 8;
+  return { week, weeks, over: week > weeks, left: Math.max(0, weeks - week + 1) };
+}
+// 체중 기록: [{day, kg}] → 처음·지금·목표까지 남은 양·최근 주당 변화
+export function weightTrend(log = [], target = null) {
+  if (!log.length) return null;
+  const first = log[0], last = log[log.length - 1];
+  const days = Math.max(1, (parseDay(last.day) - parseDay(first.day)) / 864e5);
+  return { start: first.kg, now: last.kg, change: Math.round((last.kg - first.kg) * 10) / 10, perWeek: log.length > 1 ? Math.round((last.kg - first.kg) / days * 7 * 100) / 100 : null, toGo: target ? Math.round((target - last.kg) * 10) / 10 : null };
 }
 
 // v1 플랜(스쿼트·굿모닝·푸시업만)을 v2로: 그동안 올린 횟수·세트·푸시업 자세는 이어받음
@@ -133,8 +167,9 @@ export function nextDay(plan, history = []) {
 }
 
 // 오늘 할 운동: 회복 주에는 세트를 하나 줄임(횟수는 그대로)
-export function todayPlan(plan, history = [], today = new Date()) {
-  const { week, recovery } = weekInfo(plan, today), wk = nextDay(plan, history);
+// pick: 빠른 체험에서 고른 구성(A/B/C). 없으면 기록대로 다음 구성
+export function todayPlan(plan, history = [], today = new Date(), pick = null) {
+  const { week, recovery } = weekInfo(plan, today), wk = pick && DAYS[pick] ? pick : nextDay(plan, history);
   const keys = [...DAYS[wk], ...(plan.goal === 'diet' ? ['cardio'] : [])];
   const items = keys.map(slot => {
     const s = plan.slots[slot], entry = SLOTS[slot].ladder[s.tier], ex = exOf(entry), d = EXDEF[ex];

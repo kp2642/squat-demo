@@ -37,6 +37,7 @@ const DOWN = {
 
 // 공통 문구
 const C = {
+  wait: '좋아요, 그 자세로 버티세요',
   depth: '조금 더 깊이 내려가세요',
   tempo: '천천히 하세요',
   torso: '상체를 세우세요',
@@ -216,10 +217,10 @@ export const SPECS = {
     kind: 'hold', view: 'side', down: 'fore', axis: 'x', chain: 'kneeline', arcAt: 2,
     sig: (m) => m.sagK,
     pose: (m) => m.flat < 35,
-    fault: (m, t) => m.sagK > t.sag ? 'sag' : -m.sagK > t.pike ? 'pike' : null,
-    hold: { relaxed: { sag: 15, pike: 25 }, strict: { sag: 10, pike: 18 } },
-    cues: { sag: '엉덩이를 조금 올려 일직선으로', pike: '엉덩이를 조금 내려 일직선으로' },
-    note: { relaxed: '어깨-엉덩이-무릎이 대체로 일직선인 동안 시간이 흘러요.', strict: '일직선에서 10° 넘게 벗어나면 시간이 멈춰요.' },
+    fault: (m, t) => m.sagK > t.sag ? 'sag' : -m.sagK > t.pike ? 'pike' : m.liftK < t.lift ? 'low' : null,
+    hold: { relaxed: { sag: 13, pike: 25, lift: 0.65 }, strict: { sag: 9, pike: 18, lift: 0.72 } },
+    cues: { sag: '엉덩이를 조금 올려 일직선으로', pike: '엉덩이를 조금 내려 일직선으로', low: '엉덩이를 바닥에서 들어 무릎부터 어깨까지 일직선으로' },
+    note: { relaxed: '엉덩이를 들고 어깨-엉덩이-무릎이 대체로 일직선인 동안 시간이 흘러요.', strict: '엉덩이를 들고 일직선에서 9° 넘게 벗어나지 않아야 시간이 흘러요.' },
     place: '휴대폰을 바닥에 가로로 세우고, 옆모습이 보이게 엎드려요.',
     setupMsg: '팔꿈치와 무릎을 대고 엎드려 주세요',
   },
@@ -227,9 +228,9 @@ export const SPECS = {
     kind: 'hold', view: 'side', down: 'fore', axis: 'x', chain: 'line', arcAt: 2,
     sig: (m) => m.sag,
     pose: (m) => m.flat < 35,
-    fault: (m, t) => m.sag > t.sag ? 'sag' : -m.sag > t.pike ? 'pike' : null,
-    hold: { relaxed: { sag: 12, pike: 22 }, strict: { sag: 8, pike: 15 } },
-    cues: { sag: '엉덩이가 처졌어요. 배에 힘주고 올리세요', pike: '엉덩이를 조금 내려 일직선으로' },
+    fault: (m, t) => m.sag > t.sag ? 'sag' : -m.sag > t.pike ? 'pike' : m.liftA < t.lift ? 'low' : null,
+    hold: { relaxed: { sag: 12, pike: 22, lift: 0.55 }, strict: { sag: 8, pike: 15, lift: 0.65 } },
+    cues: { sag: '엉덩이가 처졌어요. 배에 힘주고 올리세요', pike: '엉덩이를 조금 내려 일직선으로', low: '엉덩이와 무릎을 바닥에서 들어 일직선으로' },
     note: { relaxed: '머리부터 발까지 대체로 일직선인 동안 시간이 흘러요.', strict: '일직선에서 8° 넘게 처지면 시간이 멈춰요.' },
     place: '휴대폰을 바닥에 가로로 세우고, 옆모습이 보이게 엎드려요.',
     setupMsg: '팔꿈치를 대고 엎드려 몸을 일직선으로',
@@ -238,8 +239,8 @@ export const SPECS = {
     kind: 'hold', view: 'any', down: 'support', axis: 'x', chain: 'kneeline', arcAt: 2,
     sig: (m) => m.sagK,
     pose: (m) => m.flat < 40,
-    fault: (m, t) => m.sagK > t.sag ? 'sag' : null,
-    hold: { relaxed: { sag: 15 }, strict: { sag: 10 } },
+    fault: (m, t) => (m.sagK > t.sag || m.liftK < t.lift) ? 'sag' : null,
+    hold: { relaxed: { sag: 13, lift: 0.4 }, strict: { sag: 9, lift: 0.5 } },
     cues: { sag: '엉덩이를 들어 어깨부터 무릎까지 일직선으로' },
     note: { relaxed: '엉덩이를 든 동안 시간이 흘러요.', strict: '일직선에서 10° 넘게 처지면 시간이 멈춰요.' },
     place: '휴대폰을 바닥에 가로로 세우고, 몸 앞쪽이 보이게 옆으로 누워요.',
@@ -249,8 +250,8 @@ export const SPECS = {
     kind: 'hold', view: 'any', down: 'support', axis: 'x', chain: 'line', arcAt: 2,
     sig: (m) => m.sag,
     pose: (m) => m.flat < 40,
-    fault: (m, t) => m.sag > t.sag ? 'sag' : null,
-    hold: { relaxed: { sag: 12 }, strict: { sag: 8 } },
+    fault: (m, t) => (m.sag > t.sag || m.liftA < t.lift) ? 'sag' : null,
+    hold: { relaxed: { sag: 12, lift: 0.4 }, strict: { sag: 8, lift: 0.5 } },
     cues: { sag: '엉덩이가 처졌어요. 머리부터 발까지 일직선으로' },
     note: { relaxed: '엉덩이를 든 동안 시간이 흘러요.', strict: '일직선에서 8° 넘게 처지면 시간이 멈춰요.' },
     place: '휴대폰을 바닥에 가로로 세우고, 몸 앞쪽이 보이게 옆으로 누워요.',
@@ -399,6 +400,12 @@ export function measure(key, lm, aspect = 1) {
   const sagOf = (a, b) => { const o = offLine(a, b, n.hip), down = (b.x - a.x) >= 0 ? 1 : -1; return -deg(Math.atan2(o * down, dist(a, b) / 2)); };
   m.sag = sagOf(n.shoulder, n.ankle);
   m.sagK = sagOf(n.shoulder, n.knee);
+  // v40: 엉덩이가 바닥에서 들린 정도 — 무릎(발목) 높이에서 엉덩이까지 높이 ÷ 일직선일 때 있어야 할 높이 (1 = 일직선, 0 = 바닥).
+  // 팔꿈치를 대고 그냥 엎드려도 처짐 각도는 8° 안팎이라 각도로는 못 가림(어깨가 낮아서). 비율로 보면 엎드림 0.2~0.4, 플랭크 0.9 이상
+  const liftOf = (e) => { const a = n.shoulder, k = (n.hip.x - e.x) / ((a.x - e.x) || 1e-6), want = (e.y - a.y) * Math.min(1, Math.max(0, k));
+    return want > 0.005 ? (e.y - n.hip.y) / want : 0; };
+  m.liftK = liftOf(n.knee);
+  m.liftA = liftOf(n.ankle);
   // 엎드려 팔·다리 들기: 어깨-엉덩이 선에서 손목·발목이 떨어진 거리(몸통 길이 대비, 부호 있음 → 준비 자세 기준 변화량을 씀)
   m.armLift = offLine(hp, sh, mid(J.L.wrist, J.R.wrist)) / torso;
   m.legLift = offLine(sh, hp, an) / torso;
@@ -555,14 +562,22 @@ export class MoveCounter {
       return { event: 'setup', hint: 'hold', progress: (now - this.readySince) / 500 };
     }
     const dt = this.lastAt == null ? 0 : Math.min(250, now - this.lastAt); this.lastAt = now;
+    // v40: 잘못된 자세가 보이는 순간부터 시간을 멈춤(지적은 0.4초 이어질 때). 다시 흐르려면 바른 자세가 0.4초 이어져야 함
+    //       (전에는 지적 전 0.4초와 경계에서 깜빡일 때 시간이 계속 흘러, 그냥 엎드려 있어도 끝까지 갔음)
     if (f) {
+      this.cleanSince = null;
       if (this.fault !== f) { this.fault = f; this.faultSince = now; }
       if (now - this.faultSince >= 400) {
+        this.faultShown = true;
         const k = f === 'pose' ? 'pose' : f;
         const speak = now - this.faultSpokenAt > 3500; if (speak) { this.faultSpokenAt = now; this.faultCount[k] = (this.faultCount[k] || 0) + 1; }
         return { event: 'holdfault', fault: k, speak, sec: this.held / 1000 };
       }
-    } else { if (this.fault) this.faultSpokenAt = -1e9; this.fault = null; }
+      return { event: 'hold', sec: this.held / 1000, resumedNow: false, paused: true };
+    }
+    if (this.fault) { this.fault = null; this.cleanSince = now; }
+    if (this.cleanSince != null && now - this.cleanSince < 400) return this.faultShown ? { event: 'holdfault', fault: 'wait', speak: false, sec: this.held / 1000 } : { event: 'hold', sec: this.held / 1000, resumedNow: false, paused: true };
+    if (this.cleanSince != null) { this.cleanSince = null; this.faultShown = false; this.faultSpokenAt = -1e9; }
     this.held += dt;
     return { event: 'hold', sec: this.held / 1000, resumedNow: false };
   }
