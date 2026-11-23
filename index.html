@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="theme-color" content="#1E1E1E">
 <title>AI 자세 코치</title>
-<link rel="stylesheet" href="app.css?v=41">
+<link rel="stylesheet" href="app.css?v=42">
 </head>
 <body>
 
@@ -89,7 +89,7 @@
   <div id="err"></div>
   <div style="flex:1"></div>
   <button class="primary" id="startBtn">시작하기</button>
-  <p class="foot">v41 · <button class="link" id="devBtn">테스트 도구 켜기</button></p>
+  <p class="foot">v42 · <button class="link" id="devBtn">테스트 도구 켜기</button></p>
 </section>
 
 <section id="welcome" class="screen light">
@@ -181,6 +181,7 @@
     <p class="note" style="margin:6px 0 0">덤벨·헬스장 플랜은 다음 버전에서 열려요.</p></div>
   <div><label class="lbl">기간</label>
     <div class="seg" id="pWeeks" style="grid-template-columns:repeat(3,1fr);margin-top:6px"><button data-v="4">4주</button><button data-v="8">8주</button><button data-v="12">12주</button></div>
+    <p class="note" id="weeksNote" style="margin:6px 0 0"></p>
     <p class="note" style="margin:6px 0 0">처음이면 8주를 권해요. 4주마다 한 번은 몸이 회복하도록 가볍게 하는 주예요.</p></div>
   <div id="targetBox" style="display:none"><label class="lbl" for="pTarget">목표 체중 (선택, kg)</label>
     <input id="pTarget" type="number" inputmode="decimal" min="30" max="250" placeholder="비워 두어도 돼요" style="margin-top:6px">
@@ -257,6 +258,6 @@
   <button class="primary" id="dHome">처음으로</button>
 </section>
 
-<script type="module" src="app.js?v=41"></script>
+<script type="module" src="app.js?v=42"></script>
 </body>
 </html>

@@ -1,10 +1,10 @@
 // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식 (v40: app.js에서 분리)
 // C: 앱 상태를 읽는 함수들 { pstyle(), counter() }
-import * as SQ from './squat-logic.js?v=41';
-import * as PU from './pushup-logic.js?v=41';
-import * as GM from './goodmorning-logic.js?v=41';
-import * as MV from './move-logic.js?v=41';
-import { GX, PLACE } from './data-ko.js?v=41';
+import * as SQ from './squat-logic.js?v=42';
+import * as PU from './pushup-logic.js?v=42';
+import * as GM from './goodmorning-logic.js?v=42';
+import * as MV from './move-logic.js?v=42';
+import { GX, PLACE } from './data-ko.js?v=42';
 export const JUDGED3 = ['squat', 'pushup', 'goodmorning'];
 export function makeExercises(C) {
   // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식

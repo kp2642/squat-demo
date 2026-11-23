@@ -100,7 +100,7 @@ export function makePlan(p, today = new Date()) {
     v: 2, start: dayKey(monday(today)), days: p.days, goal: p.goal, level: p.level,
     mode: p.level === 'ge6' && !careful ? 'strict' : 'relaxed', cap: g.cap, careful, slots,
     // v40: 장소(첫 버전은 집 맨몸만), 기간(4·8·12주), 목표 체중(선택), 체중 감량 강화(유산소 주 250분)
-    place: p.place || 'home', weeks: WEEKS.includes(p.weeks) ? p.weeks : 8, target: p.target || null, boost: !!p.boost,
+    place: p.place || 'home', weeks: WEEKS.includes(p.weeks) ? p.weeks : 8, target: p.target || null, boost: !!p.boost, phase: 0,
   };
 }
 
@@ -159,6 +159,36 @@ export function weekInfo(plan, today = new Date()) {
   return { week: w + 1, recovery: w % 4 === 3 };
 }
 
+// ── v42: 단계 구성 (4주씩, 끝 주는 회복 주) ──
+// 근거: 입문자 블록 주기화(NSCA·ACSM) — 처음엔 자세·적응, 다음엔 운동량(세트), 그다음엔 강도(더 어려운 동작)
+//  base(기초, 1~4주): 자세를 익히는 시기. 한 번에 1칸씩만 올리고, 더 어려운 동작으로는 안 넘어감
+//  build(발전, 5~8주): 큰 근육 종목 세트 +1(최대 3). 평소처럼 올리고 다음 동작으로도 넘어감
+//  peak(강화, 9~12주): 큰 근육 종목 휴식 +15초, 상한보다 2칸 앞에서 다음 동작으로(강도 위주)
+// 4주 플랜 = 기초, 8주 = 기초→발전, 12주 = 기초→발전→강화. 기간을 넘기면 마지막 단계 유지
+export const PHASES = { 4: ['base'], 8: ['base', 'build'], 12: ['base', 'build', 'peak'] };
+export function phaseOf(plan, today = new Date()) {
+  const list = PHASES[plan.weeks] || PHASES[8], { week } = weekInfo(plan, today);
+  const idx = Math.min(list.length - 1, Math.floor((week - 1) / 4));
+  return { key: list[idx], idx, of: list.length, from: idx * 4 + 1, to: idx * 4 + 4, next: list[idx + 1] || null, list };
+}
+// 새 단계에 들어서면 한 번만 칸(슬롯) 설정을 바꿈. 바뀐 게 있으면 {key, changes} (화면 안내용), 없으면 null
+export function enterPhase(plan, today = new Date()) {
+  const ph = phaseOf(plan, today);
+  if (plan.phase == null) { plan.phase = ph.idx; return null; } // v41 이전 플랜은 지금 단계부터 (바꾸지 않음)
+  else if (plan.phase >= ph.idx) return null;
+  const changes = [];
+  for (let i = plan.phase + 1; i <= ph.idx; i++) {
+    const key = ph.list[i];
+    for (const [k, sl] of Object.entries(plan.slots)) {
+      if (!SLOTS[k] || !SLOTS[k].main) continue;
+      if (key === 'build' && sl.sets < LIMITS.maxSets && !plan.careful) { sl.sets += 1; changes.push(k); }
+      if (key === 'peak') { sl.rest += 15; changes.push(k); }
+    }
+  }
+  plan.phase = ph.idx;
+  return { key: ph.key, changes: [...new Set(changes)] };
+}
+
 // 다음에 할 요일 구성: 마지막으로 끝까지 한(빠른 체험 아닌) 운동의 다음 순서
 export function nextDay(plan, history = []) {
   const order = plan.days >= 3 ? ['A', 'B', 'C'] : ['A', 'B'];
@@ -195,8 +225,8 @@ export function counts(history, today = new Date()) {
 // - '한계예요'가 있거나 목표의 70%도 못 채우면 -1칸, 그 사이면 그대로
 // - 상한에 닿으면 세트를 하나 늘리고(최대 3), 3세트도 상한이면 다음 단계 동작으로(2세트, 그 동작의 중간 시작값)
 // - 회복 주이거나 세트를 다 못 했으면 조절하지 않음
-export function progress(plan, sets, recovery) {
-  const out = {};
+export function progress(plan, sets, recovery, today = new Date()) {
+  const out = {}, phase = phaseOf(plan, today).key;
   const slots = [...new Set(sets.map(s => s.slot).filter(Boolean))];
   for (const k of slots) {
     const xs = sets.filter(s => s.slot === k), cur = plan.slots[k], lad = SLOTS[k].ladder;
@@ -208,12 +238,15 @@ export function progress(plan, sets, recovery) {
     const rp = xs.map(s => s.rpe).filter(Boolean), easy = rp.filter(r => r === 'easy').length, max = rp.includes('max');
     let d = 0, why = 'same';
     if (max || done < want * 0.7) { d = -1; why = max ? 'max' : 'missed'; }
-    else if (hit) { d = easy * 2 > rp.length ? 2 : 1; why = d === 2 ? 'easy' : 'hit'; }
+    else if (hit) { d = easy * 2 > rp.length && phase !== 'base' ? 2 : 1; why = d === 2 ? 'easy' : 'hit'; }
     const min = EXDEF[ex].unit === 'sec' ? LIMITS.minSec : LIMITS.minReps, cap = capOf(plan, ex);
     let reps = Math.max(min, cur.reps + d * step), nsets = cur.sets, tier = cur.tier;
-    if (reps >= cap) {
+    // 강화 단계: 3세트에서 상한 2칸 앞이면 다음 동작으로
+    const early = phase === 'peak' && nsets >= LIMITS.maxSets && tier < lad.length - 1 && d > 0 && reps >= cap - 2 * step;
+    if (reps >= cap || early) {
       if (nsets < LIMITS.maxSets) { nsets += 1; reps = Math.max(min, cap - 4 * step); why = 'addSet'; }
-      else if (tier < lad.length - 1) { tier += 1; nsets = 2; reps = EXDEF[exOf(lad[tier])].start[1]; why = 'nextStep'; }
+      else if (tier < lad.length - 1 && phase !== 'base') { tier += 1; nsets = 2; reps = EXDEF[exOf(lad[tier])].start[1]; why = 'nextStep'; }
+      else if (tier < lad.length - 1) { reps = cap; why = 'phaseHold'; } // 기초 단계: 다음 동작은 발전 단계부터
       else { reps = cap; why = 'top'; }
     }
     Object.assign(cur, { reps, sets: nsets, tier });
