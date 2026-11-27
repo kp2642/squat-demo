@@ -90,15 +90,17 @@ const stepOf = (ex) => EXDEF[ex].unit === 'sec' ? (EXDEF[ex].step || 5) : 1;
 export function makePlan(p, today = new Date()) {
   const careful = cautious(p), g = GOAL[p.goal] || GOAL.fitness;
   const lv = Math.max(0, LEVELS.indexOf(p.level)), slv = careful ? Math.max(0, lv - 1) : lv;
-  const sets = careful ? Math.min(START_SETS[lv], 2) : START_SETS[lv];
+  // v45: 강도 '높게' — 동작(단계)은 경력대로 두고, 횟수는 한 경력 위 시작값, 세트 +1(최대 3), 휴식 -15초. 건강 확인 '예' 등 조심해야 하면 무시
+  const hard = p.intensity === 'high' && !careful, rlv = hard ? Math.min(2, slv + 1) : slv;
+  const sets = careful ? Math.min(START_SETS[lv], 2) : Math.min(LIMITS.maxSets, START_SETS[lv] + (hard ? 1 : 0));
   const slots = {};
   for (const [k, s] of Object.entries(SLOTS)) {
     const tier = Math.min(s.startTier[slv], s.ladder.length - 1), ex = exOf(s.ladder[tier]);
-    slots[k] = { tier, sets: s.short ? Math.min(sets, 2) : sets, reps: EXDEF[ex].start[slv], rest: s.short ? 30 : s.main ? g.rest.main : g.rest.acc };
+    slots[k] = { tier, sets: s.short ? Math.min(sets, 2) : sets, reps: EXDEF[ex].start[rlv], rest: s.short ? 30 : Math.max(30, (s.main ? g.rest.main : g.rest.acc) - (hard ? 15 : 0)) };
   }
   return {
     v: 2, start: dayKey(monday(today)), days: p.days, goal: p.goal, level: p.level,
-    mode: p.level === 'ge6' && !careful ? 'strict' : 'relaxed', cap: g.cap, careful, slots,
+    mode: p.level === 'ge6' && !careful ? 'strict' : 'relaxed', cap: g.cap, careful, slots, intensity: hard ? 'high' : 'normal',
     // v40: 장소(첫 버전은 집 맨몸만), 기간(4·8·12주), 목표 체중(선택), 체중 감량 강화(유산소 주 250분)
     place: p.place || 'home', weeks: WEEKS.includes(p.weeks) ? p.weeks : 8, target: p.target || null, boost: !!p.boost, phase: 0,
   };
@@ -137,7 +139,7 @@ export function goalPace(plan, weights = [], history = [], today = new Date()) {
   const last = weights[weights.length - 1], now = last.kg, toGo = plan.target - now, kind = plan.goal === 'muscle' ? 'gain' : 'loss';
   if ((kind === 'loss' && toGo >= 0) || (kind === 'gain' && toGo <= 0)) return null; // 목표 달성
   const from = new Date(today); from.setDate(from.getDate() - 13);
-  const cut = history.filter(h => !h.quick && h.cond && h.day >= dayKey(from)).length;
+  const cut = history.filter(h => !h.quick && h.cond && (['tired', 'low'].includes(h.cond.level) || (h.cond.parts || []).length) && h.day >= dayKey(from)).length;
   const stale = (today - parseDay(last.day)) / 864e5 > 10; // 10일 넘게 체중을 안 적음
   const max = kind === 'loss' ? RATE.lossMax : RATE.gainMax, weeksLeft = Math.max(1, sp.left), abs = Math.abs(toGo);
   const need = abs / weeksLeft, pct = need / now, behind = pct > max + 1e-9;
@@ -272,13 +274,16 @@ export function adjustToday(plan, tp, cond) {
     const k = FILL.find(k => !used.has(k) && plan.slots[k] && !loads(exOf(SLOTS[k].ladder[plan.slots[k].tier]), parts));
     if (k) { used.add(k); const n = itemOf(plan, k, tp.recovery); n.fill = it.slot; items.push(n); added.push({ slot: k, ex: n.ex, for: it.ex }); }
   }
-  if (level !== 'good') items = items.map(x => {
+  // great(최상): 큰 근육 종목만 오늘 한 세트 더(최대 4). 회복 주·아픈 곳을 고른 날은 늘리지 않음
+  const greatBlocked = level === 'great' ? (tp.recovery ? 'recovery' : parts.length ? 'parts' : null) : null;
+  if (level === 'great') { if (!greatBlocked) items = items.map(x => SLOTS[x.slot] && SLOTS[x.slot].main ? { ...x, sets: Math.min(LIMITS.maxSets + 1, x.sets + 1) } : x); }
+  else if (level !== 'good') items = items.map(x => {
     const min = x.unit === 'sec' ? LIMITS.minSec : LIMITS.minReps, step = stepOf(x.ex);
     if (level === 'tired') return { ...x, sets: Math.max(1, x.sets - 1) };
     return { ...x, sets: 1, reps: Math.max(min, Math.round(x.reps * 0.8 / step) * step) };
   });
   // rows: 원래 종목마다 {from, to(바뀐 뒤 종목, 빠지면 null)} — 화면에서 바뀐 곳을 줄 그어 보여 줌
-  return { items, removed, added, swapped, rows: rows.map(r => ({ from: r.from, to: r.i >= 0 ? items[r.i] : null })) };
+  return { items, removed, added, swapped, greatBlocked, rows: rows.map(r => ({ from: r.from, to: r.i >= 0 ? items[r.i] : null })) };
 }
 // 같은 관절 통증이 최근 기록(빠른 체험 제외)에서 이번까지 몇 번 연속인지 — 3번이면 진료 권유
 export function painStreak(history, parts) {
@@ -320,7 +325,7 @@ export function progress(plan, sets, recovery, today = new Date()) {
     const rp = xs.map(s => s.rpe).filter(Boolean), easy = rp.filter(r => r === 'easy').length, max = rp.includes('max');
     let d = 0, why = 'same';
     if (max || done < want * 0.7) { d = -1; why = max ? 'max' : 'missed'; }
-    else if (hit) { d = easy * 2 > rp.length && phase !== 'base' ? 2 : 1; why = d === 2 ? 'easy' : 'hit'; }
+    else if (hit) { d = (easy * 2 > rp.length || plan.intensity === 'high') && phase !== 'base' ? 2 : 1; why = d === 2 ? (easy * 2 > rp.length ? 'easy' : 'hard') : 'hit'; } // 강도 높게: 다 채우면 두 칸
     const min = EXDEF[ex].unit === 'sec' ? LIMITS.minSec : LIMITS.minReps, cap = capOf(plan, ex);
     let reps = Math.max(min, cur.reps + d * step), nsets = cur.sets, tier = cur.tier;
     // 강화 단계: 3세트에서 상한 2칸 앞이면 다음 동작으로

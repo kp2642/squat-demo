@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="theme-color" content="#1E1E1E">
 <title>AI 자세 코치</title>
-<link rel="stylesheet" href="app.css?v=44">
+<link rel="stylesheet" href="app.css?v=45">
 </head>
 <body>
 
@@ -89,7 +89,7 @@
   <div id="err"></div>
   <div style="flex:1"></div>
   <button class="primary" id="startBtn">시작하기</button>
-  <p class="foot">v44 · <button class="link" id="devBtn">테스트 도구 켜기</button></p>
+  <p class="foot">v45 · <button class="link" id="devBtn">테스트 도구 켜기</button></p>
 </section>
 
 <section id="welcome" class="screen light">
@@ -110,7 +110,7 @@
 <section id="cond" class="screen light">
   <div class="kicker">운동 전 확인</div>
   <h2>오늘 컨디션은 어때요?</h2>
-  <div class="seg" id="cLevel" style="grid-template-columns:repeat(3,1fr)"><button data-v="good" class="sel">좋아요</button><button data-v="tired">조금 피곤해요</button><button data-v="low">많이 피곤해요</button></div>
+  <div class="seg" id="cLevel" style="grid-template-columns:1fr 1fr"><button data-v="great">최상이에요</button><button data-v="good" class="sel">좋아요</button><button data-v="tired">조금 피곤해요</button><button data-v="low">많이 피곤해요</button></div>
   <div>
     <label class="lbl">아프거나 뻐근한 곳 (있으면 모두 골라요)</label>
     <div class="chips" id="cParts" style="margin-top:6px"></div>
@@ -191,6 +191,9 @@
   <div><label class="lbl">일주일에 몇 번</label>
     <div class="seg" id="pDays" style="grid-template-columns:repeat(3,1fr);margin-top:6px"><button data-v="2">2번</button><button data-v="3">3번</button><button data-v="4">4번</button></div>
     <p class="note" style="margin:6px 0 0">처음이면 2~3번을 권해요. 같은 근육은 하루 이상 쉬고 운동하세요.</p></div>
+  <div><label class="lbl">강도</label>
+    <div class="seg" id="pInt" style="grid-template-columns:1fr 1fr;margin-top:6px"><button data-v="normal" class="sel">보통 (추천)</button><button data-v="high">높게</button></div>
+    <p class="note" id="intNote" style="margin:6px 0 0">경력에 맞춘 기본 강도예요.</p></div>
   <div><label class="lbl">운동 장소</label>
     <div class="seg" id="pPlace" style="grid-template-columns:repeat(3,1fr);margin-top:6px"><button data-v="home" class="sel">집 (맨몸)</button><button data-v="dumbbell" disabled>집 (덤벨)</button><button data-v="gym" disabled>헬스장</button></div>
     <p class="note" style="margin:6px 0 0">덤벨·헬스장 플랜은 다음 버전에서 열려요.</p></div>
@@ -273,6 +276,6 @@
   <button class="primary" id="dHome">처음으로</button>
 </section>
 
-<script type="module" src="app.js?v=44"></script>
+<script type="module" src="app.js?v=45"></script>
 </body>
 </html>

@@ -97,4 +97,4 @@ export const WEEKS_NOTE = {
 
 // v43: 오늘 컨디션 — 부위 (plan.js PARTS의 키)
 export const PART_KO = { knee: '무릎', back: '허리', shoulder: '어깨', wrist: '손목', ankle: '발목', legs: '하체 근육통', arms: '상체 근육통' };
-export const COND_KO = { good: '좋아요', tired: '조금 피곤해요', low: '많이 피곤해요' };
+export const COND_KO = { great: '최상이에요', good: '좋아요', tired: '조금 피곤해요', low: '많이 피곤해요' };

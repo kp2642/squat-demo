@@ -1,10 +1,10 @@
-import * as SQ from './squat-logic.js?v=44';
-import * as PL from './plan.js?v=44';
-import * as PU from './pushup-logic.js?v=44';
-import * as GM from './goodmorning-logic.js?v=44';
-import { NUM, WARMUP, COOLDOWN, PLACE, GX, PLACE_G, STYLE_NAME_, STYLE_NAME, GOAL_NAME, RPE, PARQ, SIDE_KO, iyeyo, PHASE, WEEKS_NOTE, PART_KO, COND_KO } from './data-ko.js?v=44';
-import { makeExercises, JUDGED3 } from './exercises.js?v=44';
-import * as MV from './move-logic.js?v=44';
+import * as SQ from './squat-logic.js?v=45';
+import * as PL from './plan.js?v=45';
+import * as PU from './pushup-logic.js?v=45';
+import * as GM from './goodmorning-logic.js?v=45';
+import { NUM, WARMUP, COOLDOWN, PLACE, GX, PLACE_G, STYLE_NAME_, STYLE_NAME, GOAL_NAME, RPE, PARQ, SIDE_KO, iyeyo, PHASE, WEEKS_NOTE, PART_KO, COND_KO } from './data-ko.js?v=45';
+import { makeExercises, JUDGED3 } from './exercises.js?v=45';
+import * as MV from './move-logic.js?v=45';
 
 const EXERCISES = makeExercises({ pstyle: () => pstyle, counter: () => counter });
 let exercise = 'squat', pstyle = 'knees', flow = 'session', session = null;
@@ -450,7 +450,7 @@ function renderCond() {
   }).join('');
   const n = a.items.reduce((s, x) => s + x.sets, 0);
   $('cPlan').innerHTML = `<b>오늘 운동${changed ? ` · ${changed}곳 바뀜` : ' · 플랜대로'}</b><ul class="plan cplan">${li}</ul>`
-    + `<span class="note">본운동 ${a.items.length}종목 · ${n}세트. ${cond.level !== 'good' ? '세트를 줄인 날은 다음 운동 횟수를 올리지 않아요.' : changed ? '플랜은 그대로고, 오늘만 바꿔요. 뺀 종목은 다음에 그대로 이어서 해요.' : ''}</span>`;
+    + `<span class="note">본운동 ${a.items.length}종목 · ${n}세트. ${cond.level === 'great' ? (a.greatBlocked === 'recovery' ? '이번 주는 회복 주라 세트를 늘리지 않아요. 쉬는 동안 몸이 강해져요.' : a.greatBlocked ? '아프거나 뻐근한 곳이 있는 날은 세트를 늘리지 않아요.' : '큰 근육 종목만 오늘 한 세트씩 더 해요.') : cond.level !== 'good' ? '세트를 줄인 날은 다음 운동 횟수를 올리지 않아요.' : changed ? '플랜은 그대로고, 오늘만 바꿔요. 뺀 종목은 다음에 그대로 이어서 해요.' : ''}</span>`;
   const pain = cond.parts.filter(p => PL.PAIN.includes(p)), st = PL.painStreak(store.history, pain), long = pain.filter(p => st[p] >= 3);
   const w = [];
   if (long.length) w.push(`<b>${long.map(p => PART_KO[p]).join('·')} 통증이 ${Math.max(...long.map(p => st[p]))}번 연속이에요.</b> 며칠 운동을 쉬고 병원이나 전문가에게 진료를 받아 보세요.`);
@@ -470,7 +470,7 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EX().line(r)} / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `${EX().name} 데모 v44 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `${EX().name} 데모 v45 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
@@ -544,7 +544,7 @@ function renderMyPlan() {
         + (gp.extendTo ? `<button data-k="extend"><b>기간을 ${gp.extendTo}주로 늘리기 (추천)</b>목표는 그대로, 기간만 늘려요.</button>` : '')
         + `<button data-k="lower"><b>목표를 ${gp.safeTarget}kg로 조정</b>남은 ${gp.weeksLeft}주에 무리 없이 갈 수 있어요.</button></div></div>`
       : `<div class="pace"><span class="note">최근 2주에 컨디션으로 줄인 날이 ${gp.cut}번이에요. 목표 속도는 아직 괜찮아요. 같은 곳이 계속 아프면 쉬고 진료를 받아 보세요.</span></div>`;
-    $('myPlan').innerHTML = `<div class="card"><b>내 플랜 · ${sp.over ? `${sp.weeks}주 완료` : `${sp.weeks}주 중 ${sp.week}주차`}</b>${recovery && !sp.over ? '<span class="badge">회복 주</span>' : ''}<br>${GOAL_NAME[pl.goal]} · 주 ${pl.days}회 · 이번 주 <b>${c.thisWeek} / ${pl.days}회</b> · 최근 2주 ${c.last14}회${wline}${paceHtml}${phLine}`
+    $('myPlan').innerHTML = `<div class="card"><b>내 플랜 · ${sp.over ? `${sp.weeks}주 완료` : `${sp.weeks}주 중 ${sp.week}주차`}</b>${recovery && !sp.over ? '<span class="badge">회복 주</span>' : ''}<br>${GOAL_NAME[pl.goal]} · 주 ${pl.days}회${pl.intensity === 'high' ? ' · 강도 높게' : ''} · 이번 주 <b>${c.thisWeek} / ${pl.days}회</b> · 최근 2주 ${c.last14}회${wline}${paceHtml}${phLine}`
       + (sp.over ? `<br><span class="note"><b>${sp.weeks}주 플랜을 마쳤어요!</b> 새 플랜을 만들면 지금까지 올린 동작과 횟수를 이어받아 1주차부터 다시 시작해요.</span>` : '')
       + (recovery && !sp.over ? '<br><span class="note">4주마다 한 번은 몸이 회복하도록 세트를 하나씩 줄여요.</span>' : '')
       + (pl.goal === 'diet' ? `<br><span class="note">${pl.boost ? '목표 속도를 내려면 빠르게 걷기 같은 유산소 주 250분과 식단 관리를 꼭 함께 하세요.' : '체중 감량은 빠르게 걷기 같은 유산소를 주 150분 함께 하면 좋아요.'}</span>` : '')
@@ -598,7 +598,7 @@ $('hBack').onclick = () => show('intro');
 let setupAns = {};
 function openSetup() {
   const p = store.profile || {};
-  setupAns = { parq: p.parq ? [...p.parq] : PARQ.map(() => null), level: p.level, goal: p.goal, days: p.days || 3, weeks: p.weeks || 8, place: 'home', boost: false };
+  setupAns = { parq: p.parq ? [...p.parq] : PARQ.map(() => null), level: p.level, goal: p.goal, days: p.days || 3, weeks: p.weeks || 8, place: 'home', boost: false, intensity: p.intensity || 'normal' };
   $('parq').innerHTML = PARQ.map((q, i) => `<div class="q"><span>${i + 1}. ${q}</span><div class="seg" data-i="${i}"><button data-v="0">아니오</button><button data-v="1" class="yes">예</button></div></div>`).join('');
   $('parq').querySelectorAll('.seg').forEach(el => {
     const i = +el.dataset.i;
@@ -609,6 +609,7 @@ function openSetup() {
   $('pAge').value = p.age || ''; $('pHeight').value = p.height || ''; $('pWeight').value = p.weight || '';
   ['pLevel', 'pGoal', 'pDays', 'pWeeks'].forEach(id => pick(id, setupAns[{ pLevel: 'level', pGoal: 'goal', pDays: 'days', pWeeks: 'weeks' }[id]]));
   $('weeksNote').textContent = WEEKS_NOTE[setupAns.weeks] || '';
+  pick('pInt', setupAns.intensity); intUI();
   $('pTarget').value = p.target || '';
   $('setupErr').textContent = ''; $('goalWarn').style.display = 'none'; targetUI();
   show('setup'); $('setup').scrollTop = 0;
@@ -616,6 +617,14 @@ function openSetup() {
 seg('pLevel', v => setupAns.level = v);
 seg('pGoal', v => { setupAns.goal = v; targetUI(); });
 seg('pDays', v => setupAns.days = +v);
+// v45: 강도 — 건강 확인에 '예'가 있으면 '높게'를 못 고름
+function intUI() {
+  const no = (setupAns.parq || []).some(v => v === 1), hb = $('pInt').querySelector('[data-v=high]');
+  hb.disabled = no; if (no && setupAns.intensity === 'high') { setupAns.intensity = 'normal'; pick('pInt', 'normal'); }
+  $('intNote').textContent = no ? "건강 확인에 '예'가 있어서 보통 강도로 시작해요." : setupAns.intensity === 'high' ? '시작 횟수와 세트를 한 단계 높이고, 휴식은 15초 줄이고, 목표를 채우면 두 칸씩 올려요. 운동을 꾸준히 해 온 분께 맞아요.' : '경력에 맞춘 기본 강도예요. 쉬우면 세트 끝에 \'쉬웠어요\'를 누르면 더 빨리 올라가요.';
+}
+seg('pInt', v => { setupAns.intensity = v; intUI(); });
+$('parq').addEventListener('click', () => setTimeout(intUI));
 seg('pWeeks', v => { setupAns.weeks = +v; targetUI(); $('weeksNote').textContent = WEEKS_NOTE[setupAns.weeks]; });
 // v40: 목표 체중 — 감량·근육 목표일 때만. 입력하는 동안 주당 변화량과 무리 여부를 바로 보여 줌
 function targetUI() {
@@ -667,7 +676,7 @@ $('makePlan').onclick = () => {
   }
   setupAns.forceOk = false;
   const old = store.plan;
-  store.profile = { age, height, weight, level: setupAns.level, goal: setupAns.goal, days: setupAns.days, parq: setupAns.parq, weeks: setupAns.weeks, place: setupAns.place, target, boost: !!(target && setupAns.boost), at: Date.now() };
+  store.profile = { age, height, weight, level: setupAns.level, goal: setupAns.goal, days: setupAns.days, parq: setupAns.parq, weeks: setupAns.weeks, place: setupAns.place, intensity: setupAns.intensity, target, boost: !!(target && setupAns.boost), at: Date.now() };
   store.plan = PL.makePlan(store.profile);
   // 다시 만들 때는 그동안 올린 횟수를 이어받음 (경력·건강 확인이 바뀌어도 더 쉬운 쪽을 택함)
   // 다시 만들 때는 그동안 올린 단계·횟수를 이어받음 (건강 확인 결과로 더 쉽게 시작해야 하면 새 플랜대로)
@@ -728,7 +737,7 @@ function showMove([, , , key, side, dir]) {
   const f = $('tPrev'); if (!key) { f.style.display = 'none'; return; }
   f.style.display = 'block';
   if (movesReady && f.contentWindow) f.contentWindow.postMessage({ type: 'move', ex: key, side, dir }, location.origin);
-  else f.src = `guide.html?v=44&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
+  else f.src = `guide.html?v=45&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
 }
 function runTimer(it) {
   show('timer');
@@ -767,7 +776,7 @@ $('gPrev').addEventListener('load', () => { gReady = true; });
 function gMove(ex, side) {
   const f = $('gPrev');
   if (gReady && f.contentWindow) f.contentWindow.postMessage({ type: 'move', ex, side }, location.origin);
-  else f.src = `guide.html?v=44&ex=${ex}&embed=1&nocap=1&side=${side}`;
+  else f.src = `guide.html?v=45&ex=${ex}&embed=1&nocap=1&side=${side}`;
 }
 function runGuided(it) {
   show('gset');
@@ -874,7 +883,7 @@ function showRest() {
   if (nx && nx.kind === 'set') {
     $('rNextT').textContent = `다음: ${exName(nx.ex, nx.style)} ${nx.set} / ${nx.of}세트 · ${fmtN(nx.ex, tgt(nx))}`;
     $('rPlace').textContent = changing ? placeOf(nx.ex) : '같은 자리에서 이어서 해요.';
-    const src = JUDGED3.includes(nx.ex) ? `guide.html?ex=${nx.ex}&embed=1${nx.ex === 'pushup' ? '&style=' + ((nx.style || pstyle) === 'full' ? 'full' : 'knees') : ''}` : `guide.html?v=44&ex=${nx.ex}&embed=1&nocap=1`;
+    const src = JUDGED3.includes(nx.ex) ? `guide.html?ex=${nx.ex}&embed=1${nx.ex === 'pushup' ? '&style=' + ((nx.style || pstyle) === 'full' ? 'full' : 'knees') : ''}` : `guide.html?v=45&ex=${nx.ex}&embed=1&nocap=1`;
     if ($('rPrev').getAttribute('src') !== src) $('rPrev').setAttribute('src', src);
     $('rPrev').style.display = 'block';
   } else { $('rNextT').textContent = '다음: 쿨다운 5분'; $('rPlace').textContent = '마지막 세트까지 끝났어요. 체감 강도를 누르고 쿨다운을 시작하세요.'; $('rPrev').style.display = 'none'; $('rPrev').removeAttribute('src'); }
@@ -945,7 +954,7 @@ function finishSession() {
     if (store.history.length > 300) store.history.splice(0, store.history.length - 300);
     if (!quick && store.plan) {
       const ch = PL.progress(store.plan, sets, S.recovery);
-      const WHY = { easy: '쉬웠다고 해서', hit: '목표를 다 채워서', same: '그대로 한 번 더', max: '한계였던 세트가 있어서', missed: '목표의 70%를 못 채워서', addSet: '충분해서 세트를 하나 늘려요', nextStep: '더 어려운 동작으로 올라가요!', phaseHold: '어려운 동작은 발전 단계(5주차)부터 해요', top: '최고 단계예요. 지금을 유지해요', recovery: '회복 주라 그대로', partial: S.cond && S.cond.level !== 'good' ? '컨디션에 맞춰 줄인 날이라 그대로' : '세트를 다 못 해서 그대로' };
+      const WHY = { easy: '쉬웠다고 해서', hit: '목표를 다 채워서', same: '그대로 한 번 더', max: '한계였던 세트가 있어서', missed: '목표의 70%를 못 채워서', addSet: '충분해서 세트를 하나 늘려요', nextStep: '더 어려운 동작으로 올라가요!', phaseHold: '어려운 동작은 발전 단계(5주차)부터 해요', top: '최고 단계예요. 지금을 유지해요', recovery: '회복 주라 그대로', hard: '강도 높게라 두 칸 올려요', partial: S.cond && ['tired', 'low'].includes(S.cond.level) ? '컨디션에 맞춰 줄인 날이라 그대로' : '세트를 다 못 해서 그대로' };
       const nm = (e) => exName(PL.exOf(e), PL.styleOf(e)), u = (e, n) => `${n}${isSec(PL.exOf(e)) ? '초' : '회'}`;
       const lines = Object.values(ch).map((c) => {
         const f = c.from, t = c.to;
@@ -957,7 +966,8 @@ function finishSession() {
     }
     if (S.cond && (S.cond.level !== 'good' || S.cond.parts.length)) {
       const why = [S.cond.level !== 'good' ? COND_KO[S.cond.level] : '', ...S.cond.parts.map(p => PART_KO[p])].filter(Boolean).join(', ');
-      $('dNext').innerHTML = `<span class="note">오늘은 컨디션(${why})에 맞춰 바꿔서 했어요. 뺀 종목은 다음에 그대로 이어서 해요.</span><br>` + $('dNext').innerHTML;
+      const msg = S.cond.level === 'great' && !S.cond.parts.length ? '컨디션이 좋아서 큰 근육 종목을 한 세트씩 더 했어요.' : `오늘은 컨디션(${why})에 맞춰 바꿔서 했어요. 뺀 종목은 다음에 그대로 이어서 해요.`;
+      $('dNext').innerHTML = `<span class="note">${msg}</span><br>` + $('dNext').innerHTML;
     }
     saveStore();
   }
@@ -966,7 +976,7 @@ function finishSession() {
 $('dHome').onclick = () => { session = null; cond = null; show('intro'); $('startBtn').disabled = false; applyFlow(); };
 $('dCopy').onclick = async () => {
   const S = session; if (!S) return;
-  const lines = [`오늘의 운동 데모 v44 결과 [${mode}·구성 ${S.wk}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
+  const lines = [`오늘의 운동 데모 v45 결과 [${mode}·구성 ${S.wk}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
   for (const x of S.sets) {
     lines.push(`■ ${exName(x.ex, x.style)} ${x.set}/${x.of}세트 (목표 ${fmtN(x.ex, x.target)}, 체감 ${x.rpe ? RPE[x.rpe][0] : '-'})${x.guided ? ` · 음성 안내 · ${fmtN(x.ex, x.done)} 함` : ''}`);
     if (!x.guided) x.log.forEach(r => lines.push(`${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EXERCISES[x.ex].line(r)}`));
