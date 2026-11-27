@@ -76,7 +76,7 @@ export function measure(lm, aspect = 1, style = 'full') {
   const t = THRESHOLDS;
   const minVis = Math.min(...need.map((k) => j[k].v));
   // v15: 휴대폰을 바닥에 두면 손목·발목이 화면 아래 끝에 걸리기 쉬워서, 아래쪽은 살짝 벗어나도 받아들임
-  const inFrame = need.every((k) => j[k].rx > 0 && j[k].rx < 1 && j[k].y > 0 && j[k].y < 1.03);
+  const inFrame = need.every((k) => j[k].rx > -0.04 && j[k].rx < 1.04 && j[k].y > -0.04 && j[k].y < 1.04); // v47: 살짝 벗어나도 받아들임
   if (minVis < t.weakVisibility || !inFrame) return { visible: false, reason: 'not_in_frame' };
   const weak = minVis < t.minVisibility; // 운동 중에만 받아들임
 

@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="theme-color" content="#1E1E1E">
 <title>AI 자세 코치</title>
-<link rel="stylesheet" href="app.css?v=46">
+<link rel="stylesheet" href="app.css?v=47">
 </head>
 <body>
 
@@ -89,7 +89,7 @@
   <div id="err"></div>
   <div style="flex:1"></div>
   <button class="primary" id="startBtn">시작하기</button>
-  <p class="foot">v46 · <button class="link" id="devBtn">테스트 도구 켜기</button></p>
+  <p class="foot">v47 · <button class="link" id="devBtn">테스트 도구 켜기</button></p>
 </section>
 
 <section id="welcome" class="screen light">
@@ -117,6 +117,11 @@
   </div>
   <div class="card" id="cPlan"></div>
   <div class="card warn" id="cWarn" style="display:none"></div>
+  <div>
+    <label class="lbl">휴대폰 자리</label>
+    <div class="seg" id="spot" style="grid-template-columns:1fr 1fr"><button data-v="one" class="sel">한 곳에 두기</button><button data-v="each">종목마다 맞추기</button></div>
+    <p class="note" id="spotNote" style="margin:6px 0 0"></p>
+  </div>
   <div style="flex:1"></div>
   <button class="primary" id="cStart">이대로 시작</button>
   <button class="ghost" id="cCancel">취소</button>
@@ -276,6 +281,6 @@
   <button class="primary" id="dHome">처음으로</button>
 </section>
 
-<script type="module" src="app.js?v=46"></script>
+<script type="module" src="app.js?v=47"></script>
 </body>
 </html>

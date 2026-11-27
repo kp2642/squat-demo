@@ -15,7 +15,8 @@ const JOINTS = ['shoulder', 'hip', 'knee', 'ankle', 'heel', 'toe'];
 // 공통 기준값 (근거: 일반적인 스쿼트 코칭 기준. 실제 사용자 데이터로 계속 조정)
 export const THRESHOLDS = {
   minVisibility: 0.6,   // 이보다 낮은 관절이 있으면 "안 보임"
-  edgeMargin: 0.02,     // 화면 가장자리에 걸린 관절은 신뢰하지 않음
+  edgeMargin: -0.04,    // v47: 화면 끝에 걸리거나 살짝 벗어나도 받아들임 (MediaPipe가 이어서 추정)
+  coreVisibility: 0.4,  // v47: 판정 관절이 이 정도로만 보여도 계속 판정 (0.6이면 조금만 잘려도 끊김)     // 화면 가장자리에 걸린 관절은 신뢰하지 않음
   sideMaxSpread: 0.45,  // 양쪽 어깨·엉덩이 가로 간격 / 몸통 길이가 이보다 크면 정면으로 본 것
   readyMs: 1000,        // 준비 자세를 이만큼 유지해야 시작
   readyKnee: 160,       // 준비 자세 무릎 각도
@@ -79,7 +80,7 @@ export function measure(lm, aspect = 1) {
   // v8: 카메라를 가까이 둘 수 있게 머리·발끝은 화면 밖이어도 됨. 어깨·엉덩이·무릎·발목만 화면 안에 있으면 판정
   const CORE = ['shoulder', 'hip', 'knee', 'ankle'];
   const inFrame = CORE.every((k) => j[k].rx > t.edgeMargin && j[k].rx < 1 - t.edgeMargin && j[k].y > t.edgeMargin && j[k].y < 1 - t.edgeMargin);
-  if (minVis < t.minVisibility || !inFrame) return { visible: false, reason: 'not_in_frame' };
+  if (minVis < t.coreVisibility || !inFrame) return { visible: false, reason: 'not_in_frame' };
 
   const torsoLen = dist(j.shoulder, j.hip);
   const legLen = dist(j.hip, j.knee) + dist(j.knee, j.ankle);

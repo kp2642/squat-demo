@@ -16,7 +16,8 @@ const CORE = ['shoulder', 'hip', 'knee', 'ankle'];
 // 햄스트링이 당기는 지점(보통 상체 45~90°)까지 숙임. 실제 사용자 데이터로 계속 조정)
 export const THRESHOLDS = {
   minVisibility: 0.6,
-  edgeMargin: 0.02,
+  edgeMargin: -0.04,    // v47: 화면 끝에 걸리거나 살짝 벗어나도 받아들임 (MediaPipe가 이어서 추정)
+  coreVisibility: 0.4,  // v47: 판정 관절이 이 정도로만 보여도 계속 판정 (0.6이면 조금만 잘려도 끊김)
   sideMaxSpread: 0.45,  // 양쪽 어깨·엉덩이 가로 간격 / 몸통 길이가 이보다 크면 정면
   readyMs: 1000,
   readyLean: 20,        // 준비: 상체가 수직에서 20° 이내
@@ -81,7 +82,7 @@ export function measure(lm, aspect = 1) {
   const minVis = Math.min(...CORE.map((k) => j[k].v));
   // 카메라를 가까이 둘 수 있게 어깨·엉덩이·무릎·발목만 화면 안에 있으면 됨(머리·발끝은 잘려도 됨)
   const inFrame = CORE.every((k) => j[k].rx > t.edgeMargin && j[k].rx < 1 - t.edgeMargin && j[k].y > t.edgeMargin && j[k].y < 1 - t.edgeMargin);
-  if (minVis < t.minVisibility || !inFrame) return { visible: false, reason: 'not_in_frame' };
+  if (minVis < t.coreVisibility || !inFrame) return { visible: false, reason: 'not_in_frame' };
 
   const torsoLen = dist(j.shoulder, j.hip);
   const legLen = dist(j.hip, j.knee) + dist(j.knee, j.ankle);

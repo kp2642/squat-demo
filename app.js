@@ -1,10 +1,10 @@
-import * as SQ from './squat-logic.js?v=46';
-import * as PL from './plan.js?v=46';
-import * as PU from './pushup-logic.js?v=46';
-import * as GM from './goodmorning-logic.js?v=46';
-import { NUM, WARMUP, COOLDOWN, PLACE, GX, PLACE_G, STYLE_NAME_, STYLE_NAME, GOAL_NAME, RPE, PARQ, SIDE_KO, iyeyo, PHASE, WEEKS_NOTE, PART_KO, COND_KO } from './data-ko.js?v=46';
-import { makeExercises, JUDGED3 } from './exercises.js?v=46';
-import * as MV from './move-logic.js?v=46';
+import * as SQ from './squat-logic.js?v=47';
+import * as PL from './plan.js?v=47';
+import * as PU from './pushup-logic.js?v=47';
+import * as GM from './goodmorning-logic.js?v=47';
+import { NUM, WARMUP, COOLDOWN, PLACE, GX, PLACE_G, STYLE_NAME_, STYLE_NAME, GOAL_NAME, RPE, PARQ, SIDE_KO, iyeyo, PHASE, WEEKS_NOTE, PART_KO, COND_KO } from './data-ko.js?v=47';
+import { makeExercises, JUDGED3 } from './exercises.js?v=47';
+import * as MV from './move-logic.js?v=47';
 
 const EXERCISES = makeExercises({ pstyle: () => pstyle, counter: () => counter });
 let exercise = 'squat', pstyle = 'knees', flow = 'session', session = null;
@@ -123,7 +123,7 @@ async function start() {
   show('live'); running = true; notVisibleSince = performance.now(); guide = { k: null, since: 0, spokenK: null, spokenAt: 0, guided: false };
   // 새 종목의 첫 세트는 하는 법을 한 번 말해 줌 (다음 세트부터는 자리 안내만)
   const how = it && it.set === 1 && GX[exercise] ? `${EX().name}. ${GX[exercise][1]} ` : '';
-  say(how + EX().startSay + (cs.sides[0] ? ` ${SIDE_KO[cs.sides[0]]}부터 해요.` : ''));
+  say(how + startSayOf(it) + (cs.sides[0] ? ` ${SIDE_KO[cs.sides[0]]}부터 해요.` : ''));
   loop();
 }
 
@@ -176,9 +176,11 @@ function framing(up) {
   if (!up) return { k: 'none', text: '화면에 사람이 보이지 않아요', say: EX().kind ? EX().startStatus : '카메라 앞에 옆모습이 보이게 서 주세요' };
   const L = EX().core(), Rr = L.map(i => i + 1);
   const vis = (ids) => ids.reduce((t, i) => t + (up.lm[i].visibility ?? 0), 0);
-  const pts = (vis(L) >= vis(Rr) ? L : Rr).map(i => up.lm[i]);
+  const nearR = vis(L) < vis(Rr), all = (nearR ? Rr : L).map(i => up.lm[i]);
+  // v47: 잘림 검사는 그 종목에 꼭 필요한 관절만 (거리 검사는 어깨~발목 길이로)
+  const pts = EX().cut ? EX().cut().map(i => up.lm[nearR ? i + 1 : i]) : all;
   const ax = EX().axis, cross = ax === 'y' ? 'x' : 'y';
-  const along = pts.map(p => p[ax]), span = Math.max(...along) - Math.min(...along);
+  const along = all.map(p => p[ax]), span = Math.max(...along) - Math.min(...along);
   // 푸시업은 손목·발목이 바닥(화면 아래 끝)에 붙기 쉬워 아래쪽 여유를 더 줌
   const slack = ax === 'x' ? 0.03 : 0;
   const lo = (p, a) => p[a] < (a === ax ? 0.02 : 0), hi = (p, a) => p[a] > (a === ax ? 0.98 : 1 + slack);
@@ -475,14 +477,40 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EX().line(r)} / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `${EX().name} 데모 v46 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `${EX().name} 데모 v47 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
 const exName = (ex, style) => (EXERCISES[ex] ? EXERCISES[ex].name : GX[ex][0]) + (ex === 'pushup' && style ? ` (${STYLE_NAME_[style]})` : '');
 const isSec = (ex) => PL.EXDEF[ex].unit === 'sec';
 const fmtN = (ex, n) => `${n}${isSec(ex) ? '초' : '회'}${PL.EXDEF[ex].side ? ' (한쪽)' : ''}`;
-const placeOf = (ex) => PLACE[ex] || PLACE_G[GX[ex][2]];
+const placeFull = (ex) => PLACE[ex] || PLACE_G[GX[ex][2]];
+// v47: 휴대폰 자리. 'one' = 세션 내내 한 곳(바닥에 세로로 기대 둠)에 두고 몸 방향만 바꿈(기본), 'each' = 종목마다 맞춤 자리
+let spot = 'one'; try { spot = localStorage.getItem('spot') || 'one'; } catch {}
+const BODY_FIX = { wallsit: '휴대폰에 옆모습이 보이는 쪽 벽에 등을 대요.', chairsquat: '의자를 등 뒤에 두고 옆모습이 보이게 서요.', goodmorning: '옆모습이 보이게 서요. 숙일 때 앞쪽에 공간이 필요해요. 손은 가슴에 X자로.' };
+// 자리 안내에서 '휴대폰을 어디에 어떻게' 부분을 뺀 몸 방향 안내
+const bodyOf = (ex) => BODY_FIX[ex] || placeFull(ex).replace(/휴대폰을 [^,]+, ?/, '').replace(/ ?휴대폰은 [^.]+\./, '').trim();
+// 휴대폰 자리 묶음(허리 높이 세로 / 바닥 가로 / 무릎 높이 …). 같으면 휴대폰을 옮기지 않아도 됨
+const phoneOf = (ex) => { const m = placeFull(ex).match(/휴대폰[을은] (.+?)(?: 세우고| 세워|\.|,)/); return m ? m[1] : ex; };
+const oneSpotSay = () => `오늘은 휴대폰을 한 곳에 두고 몸 방향만 바꿔요. 휴대폰을 바닥에 세로로 세워 벽이나 물건에 기대 두고, ${facing === 'ultra' ? '1.5미터쯤' : '2미터쯤, 세 걸음'} 떨어져요.`;
+const placeOf = (ex, prev) => spot === 'one' || (prev && phoneOf(prev) === phoneOf(ex)) ? `휴대폰은 그대로, ${bodyOf(ex)}` : placeFull(ex);
+// 세트 시작 안내: 첫 세트만 자리 안내, 이어지는 세트는 준비 자세만
+const SPOT_NOTE = {
+  one: '휴대폰을 바닥에 세로로 세워 벽이나 물건에 기대 두고, 2m쯤(초광각이면 1.5m) 떨어져요. 운동이 바뀌어도 휴대폰은 그대로 두고 몸 방향만 바꿔요.',
+  each: '종목마다 가장 잘 보이는 높이와 방향을 알려 줘요. 운동이 바뀔 때 휴대폰을 옮겨야 할 수 있어요.',
+};
+function spotUI() { [...$('spot').children].forEach(b => b.classList.toggle('sel', b.dataset.v === spot)); $('spotNote').textContent = SPOT_NOTE[spot]; }
+seg('spot', v => { spot = v; try { localStorage.setItem('spot', v); } catch {} spotUI(); });
+spotUI();
+function startSayOf(it) {
+  if (!it || !session) return EX().startSay;
+  const prev = session.items.slice(0, session.i).reverse().find(x => x.kind === 'set');
+  if (it.set > 1) return `${EX().setupMsg}.`;
+  if (spot !== 'one' && !(prev && phoneOf(prev.ex) === phoneOf(it.ex))) return EX().startSay;
+  const first = spot === 'one' && !prev && !session.items.slice(0, session.i).some(x => x.key === 'warmup') ? oneSpotSay() + ' ' : '';
+  // 쉬는 화면에서 이미 '휴대폰은 그대로'를 말했으니 여기선 몸 방향만
+  return `${first}${first || !prev ? placeOf(it.ex) : bodyOf(it.ex)} ${EX().setupMsg}.`.replace('..', '.');
+}
 // v39: 워밍업·쿨다운을 뺀 모든 본운동을 카메라로 판정 (공통 엔진 move-logic.js, 의자 스쿼트는 스쿼트 판정 그대로)
 // 세트 목표: 플랜 값 + 이번 운동에서 체감 강도로 바꾼 만큼 (초 종목은 한 칸 = 5초)
 function tgt(it) {
@@ -508,7 +536,7 @@ function buildPlan() {
   todayWk = tp.wk;
   // v43: 오늘 컨디션에 맞춰 오늘 운동만 조절 (빠른 체험 제외)
   const adj = !quick && cond ? PL.adjustToday(store.plan || defaultPlan(), tp, cond) : null;
-  // v46: 복귀 미션 (컨디션 화면에서 뺄 수 있음)
+  // v47: 복귀 미션 (컨디션 화면에서 뺄 수 있음)
   const ms = !quick && cond && cond.mission !== false ? PL.mission(store.plan || defaultPlan(), store.history, tp, cond) : null;
   for (const x of [...(adj ? adj.items : tp.items), ...(ms && ms.item ? [ms.item] : [])])
     for (let n = 1, sets = quick ? 1 : x.sets; n <= sets; n++)
@@ -744,7 +772,7 @@ function showMove([, , , key, side, dir]) {
   const f = $('tPrev'); if (!key) { f.style.display = 'none'; return; }
   f.style.display = 'block';
   if (movesReady && f.contentWindow) f.contentWindow.postMessage({ type: 'move', ex: key, side, dir }, location.origin);
-  else f.src = `guide.html?v=46&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
+  else f.src = `guide.html?v=47&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
 }
 function runTimer(it) {
   show('timer');
@@ -768,7 +796,7 @@ function tickTimer() {
 function endTimer() {
   clearInterval(tm.iv);
   const it = tm.it, after = session.items[session.i + 1];
-  if (it.key === 'warmup' && after && EXERCISES[after.ex]) say(`워밍업 끝. 첫 운동은 ${exName(after.ex)}${iyeyo(exName(after.ex))}. ${placeOf(after.ex)}`, true);
+  if (it.key === 'warmup' && after && EXERCISES[after.ex]) say(`워밍업 끝. 첫 운동은 ${exName(after.ex)}${iyeyo(exName(after.ex))}. ${spot === 'one' ? oneSpotSay() : placeFull(after.ex)}`, true);
   session.i += 1; runItem();
 }
 $('tPause').onclick = () => { tm.paused = !tm.paused; $('tPause').textContent = tm.paused ? '계속하기' : '일시정지'; };
@@ -783,7 +811,7 @@ $('gPrev').addEventListener('load', () => { gReady = true; });
 function gMove(ex, side) {
   const f = $('gPrev');
   if (gReady && f.contentWindow) f.contentWindow.postMessage({ type: 'move', ex, side }, location.origin);
-  else f.src = `guide.html?v=46&ex=${ex}&embed=1&nocap=1&side=${side}`;
+  else f.src = `guide.html?v=47&ex=${ex}&embed=1&nocap=1&side=${side}`;
 }
 function runGuided(it) {
   show('gset');
@@ -889,8 +917,8 @@ function showRest() {
   const changing = nx && nx.kind === 'set' && nx.ex !== done.ex;
   if (nx && nx.kind === 'set') {
     $('rNextT').textContent = `다음: ${exName(nx.ex, nx.style)} ${nx.set} / ${nx.of}세트 · ${fmtN(nx.ex, tgt(nx))}`;
-    $('rPlace').textContent = changing ? placeOf(nx.ex) : '같은 자리에서 이어서 해요.';
-    const src = JUDGED3.includes(nx.ex) ? `guide.html?ex=${nx.ex}&embed=1${nx.ex === 'pushup' ? '&style=' + ((nx.style || pstyle) === 'full' ? 'full' : 'knees') : ''}` : `guide.html?v=46&ex=${nx.ex}&embed=1&nocap=1`;
+    $('rPlace').textContent = changing ? placeOf(nx.ex, done.ex) : '같은 자리에서 이어서 해요.';
+    const src = JUDGED3.includes(nx.ex) ? `guide.html?ex=${nx.ex}&embed=1${nx.ex === 'pushup' ? '&style=' + ((nx.style || pstyle) === 'full' ? 'full' : 'knees') : ''}` : `guide.html?v=47&ex=${nx.ex}&embed=1&nocap=1`;
     if ($('rPrev').getAttribute('src') !== src) $('rPrev').setAttribute('src', src);
     $('rPrev').style.display = 'block';
   } else { $('rNextT').textContent = '다음: 쿨다운 5분'; $('rPlace').textContent = '마지막 세트까지 끝났어요. 체감 강도를 누르고 쿨다운을 시작하세요.'; $('rPrev').style.display = 'none'; $('rPrev').removeAttribute('src'); }
@@ -899,7 +927,7 @@ function showRest() {
   $('rBtns').style.display = restSec ? 'grid' : 'none'; $('rTime').style.display = restSec ? 'block' : 'none';
   $('rGo').style.display = restSec ? 'none' : 'block'; $('rGo').textContent = nx ? '쿨다운 시작' : '요약 보기';
   show('rest');
-  say(`${counted}${isSec(done.ex) ? '초' : '회'} 완료. 얼마나 힘들었는지 눌러 주세요.${changing ? ' 다음은 ' + exName(nx.ex) + iyeyo(exName(nx.ex)) + '. ' + placeOf(nx.ex) : ''}`, true);
+  say(`${counted}${isSec(done.ex) ? '초' : '회'} 완료. 얼마나 힘들었는지 눌러 주세요.${changing ? ' 다음은 ' + exName(nx.ex) + iyeyo(exName(nx.ex)) + '. ' + placeOf(nx.ex, done.ex) : ''}`, true);
   clearInterval(rs.iv); if (restSec) rs.iv = setInterval(tickRest, 200);
   tickRest();
 }
@@ -984,7 +1012,7 @@ function finishSession() {
 $('dHome').onclick = () => { session = null; cond = null; show('intro'); $('startBtn').disabled = false; applyFlow(); };
 $('dCopy').onclick = async () => {
   const S = session; if (!S) return;
-  const lines = [`오늘의 운동 데모 v46 결과 [${mode}·구성 ${S.wk}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
+  const lines = [`오늘의 운동 데모 v47 결과 [${mode}·구성 ${S.wk}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
   for (const x of S.sets) {
     lines.push(`■ ${exName(x.ex, x.style)} ${x.set}/${x.of}세트 (목표 ${fmtN(x.ex, x.target)}, 체감 ${x.rpe ? RPE[x.rpe][0] : '-'})${x.guided ? ` · 음성 안내 · ${fmtN(x.ex, x.done)} 함` : ''}`);
     if (!x.guided) x.log.forEach(r => lines.push(`${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EXERCISES[x.ex].line(r)}`));
