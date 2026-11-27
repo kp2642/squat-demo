@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="theme-color" content="#1E1E1E">
 <title>AI 자세 코치</title>
-<link rel="stylesheet" href="app.css?v=47">
+<link rel="stylesheet" href="app.css?v=48">
 </head>
 <body>
 
@@ -89,7 +89,7 @@
   <div id="err"></div>
   <div style="flex:1"></div>
   <button class="primary" id="startBtn">시작하기</button>
-  <p class="foot">v47 · <button class="link" id="devBtn">테스트 도구 켜기</button></p>
+  <p class="foot">v48 · <button class="link" id="devBtn">테스트 도구 켜기</button></p>
 </section>
 
 <section id="welcome" class="screen light">
@@ -150,6 +150,7 @@
       </div>
     </div>
     <div id="debug"></div>
+    <button id="demo" class="demo" aria-label="시범 동작 크게·작게·숨기기"><iframe id="demoF" title="시범 동작" tabindex="-1"></iframe><span>시범 보기</span></button>
   </div>
   <div id="ctrl">
     <div id="status">준비 중...</div>
@@ -248,6 +249,7 @@
   <div class="big" id="rTime">1:30</div>
   <div class="btnrow" id="rBtns"><button id="rPlus">+30초</button><button id="rSkip">휴식 건너뛰기</button></div>
   <button class="primary" id="rGo" style="display:none">다음 시작</button>
+  <div class="btnrow" style="grid-template-columns:1fr"><button id="rRedo">↩ 잘못 눌렀어요, 방금 세트 다시 하기</button></div>
   <div>
     <b style="font-size:15px">방금 세트, 얼마나 힘들었나요?</b>
     <div class="rpe" id="rpe" style="margin-top:8px"><button data-v="easy">쉬웠어요</button><button data-v="ok">적당해요</button><button data-v="hard">힘들어요</button><button data-v="max">한계예요</button></div>
@@ -281,6 +283,6 @@
   <button class="primary" id="dHome">처음으로</button>
 </section>
 
-<script type="module" src="app.js?v=47"></script>
+<script type="module" src="app.js?v=48"></script>
 </body>
 </html>

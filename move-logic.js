@@ -186,7 +186,7 @@ export const SPECS = {
   },
   yraise: {
     kind: 'rep', view: 'side', down: 'face', axis: 'x', chain: 'arm', arcAt: 0,
-    sig: (m) => m.armLift, base: 'abs', dir: 1, ready: 0.05, start: 0.06, ret: 0.04, gap: 0.04, minMs: 800, still: 0.05,
+    sig: (m) => m.upW ?? m.upE * 1.6, base: 'abs', dir: 1, ready: 0.05, start: 0.06, ret: 0.04, gap: 0.04, minMs: 800, still: 0.08,
     depth: { relaxed: 0.12, strict: 0.18 }, holdMs: { strict: 400 },
     cues: { depth: '팔을 조금 더 높이 드세요', hold: '위에서 잠깐 멈췄다 내려요' },
     note: { relaxed: '팔을 바닥에서 들어 올리면 인정해요.', strict: '팔을 충분히 들고 잠깐 멈춰야 인정해요.' },
@@ -195,8 +195,8 @@ export const SPECS = {
   },
   wraise: {
     kind: 'rep', view: 'side', down: 'face', axis: 'x', chain: 'arm', arcAt: 0,
-    sig: (m) => m.armLift, base: 'abs', dir: 1, ready: 0.05, start: 0.06, ret: 0.04, gap: 0.04, minMs: 800, still: 0.05,
-    depth: { relaxed: 0.1, strict: 0.15 }, holdMs: { strict: 400 },
+    sig: (m) => m.upW == null ? m.upE : (m.upE + m.upW) / 2, base: 'abs', dir: 1, ready: 0.05, start: 0.05, ret: 0.03, gap: 0.03, minMs: 800, still: 0.08,
+    depth: { relaxed: 0.08, strict: 0.12 }, holdMs: { strict: 400 },
     cues: { depth: '팔꿈치를 조금 더 높이 드세요', hold: '위에서 잠깐 멈췄다 내려요' },
     note: { relaxed: '팔을 바닥에서 들어 올리면 인정해요.', strict: '팔을 충분히 들고 잠깐 멈춰야 인정해요.' },
     place: '휴대폰을 바닥에 가로로 세우고, 옆모습이 보이게 엎드려요.',
@@ -204,7 +204,7 @@ export const SPECS = {
   },
   superman: {
     kind: 'rep', view: 'side', down: 'face', axis: 'x', chain: 'body', arcAt: 1,
-    sig: (m) => (m.armLift + m.legLift) / 2, base: 'abs', dir: 1, ready: 0.05, start: 0.05, ret: 0.035, gap: 0.03, minMs: 800, still: 0.05,
+    sig: (m) => ((m.upW ?? m.upE * 1.6) + m.legLift) / 2, base: 'abs', dir: 1, ready: 0.05, start: 0.05, ret: 0.035, gap: 0.03, minMs: 800, still: 0.08,
     depth: { relaxed: 0.08, strict: 0.12 },
     checks: [{ k: 'legs', at: 'peak', bad: (m, t, c) => c.legLift != null && c.legLift < 0.03, pen: 10 }],
     track: (m, c, base) => { c.legLift = Math.max(c.legLift ?? 0, Math.abs(m.legLift - (base.legLift ?? m.legLift))); },
@@ -310,7 +310,7 @@ export const SPECS = {
   // ─ 유산소 (시간) ─
   jumpingjack: {
     kind: 'cardio', view: 'front', down: 'stand', axis: 'y', chain: 'armup', arcAt: 1,
-    one: (m) => Math.min(m.arm.L, m.arm.R), dir: 1, on: { relaxed: 130, strict: 150 }, off: 70, every: 10,
+    one: (m) => Math.min(m.arm.L, m.arm.R), dir: 1, on: { relaxed: 120, strict: 140 }, off: 70, every: 10,
     fault: null,
     checks: [{ k: 'feet', bad: (m) => m.feet != null && m.feet < 1.3 }],
     cues: { feet: '팔을 올릴 때 발도 벌려요', arms: '팔을 머리 위까지 올려요' },
@@ -320,7 +320,7 @@ export const SPECS = {
   },
   stepjack: {
     kind: 'cardio', view: 'front', down: 'stand', axis: 'y', chain: 'armup', arcAt: 1,
-    one: (m) => Math.min(m.arm.L, m.arm.R), dir: 1, on: { relaxed: 130, strict: 150 }, off: 70, every: 10,
+    one: (m) => Math.min(m.arm.L, m.arm.R), dir: 1, on: { relaxed: 120, strict: 140 }, off: 70, every: 10,
     fault: null,
     cues: { arms: '팔을 머리 위까지 올려요' },
     note: { relaxed: '팔이 머리 높이까지 올라가면 1회로 세요.', strict: '팔을 머리 위로 끝까지 올려야 세요.' },
@@ -369,12 +369,12 @@ export const NEED = {
   bridge: TRUNK, slbridge: TRUNK, kneeplank: TRUNK, sideplankknee: TRUNK, birddog: TRUNK, deadbug: TRUNK,
   plank: ['shoulder', 'hip', 'ankle'], sideplank: ['shoulder', 'hip', 'ankle'], curlup: ['shoulder', 'hip', 'ankle'], burpee: ['shoulder', 'hip', 'ankle'],
   chairdip: ['shoulder', 'elbow', 'wrist'], pikepush: ['shoulder', 'elbow', 'wrist'],
-  yraise: ['shoulder', 'hip', 'wrist'], wraise: ['shoulder', 'hip', 'wrist'], superman: ['shoulder', 'hip', 'wrist', 'ankle'],
+  yraise: ['shoulder', 'hip', 'elbow'], wraise: ['shoulder', 'hip', 'elbow'], superman: ['shoulder', 'hip', 'elbow', 'ankle'],
   jumpingjack: ['shoulder', 'hip'], stepjack: ['shoulder', 'hip'],
 };
 export const needOf = (key) => NEED[key] || ['shoulder', 'hip', 'knee', 'ankle'];
 export const needIdx = (key) => needOf(key).map((k) => IX[k][0]);
-export const THRESHOLDS = { minVisibility: 0.35, edgeMargin: -0.04, graceMs: 700, sideMaxSpread: 0.45, readyMs: 800, readyMotion: 8, lostMs: 2500, smoothing: 0.5, minMs: 700, gap: 12 };
+export const THRESHOLDS = { minVisibility: 0.35, edgeMargin: -0.04, graceMs: 700, sideMaxSpread: 0.45, readyMs: 650, readyMotion: 8, lostMs: 2500, smoothing: 0.5, minMs: 700, gap: 12 };
 
 export function measure(key, lm, aspect = 1) {
   const S = SPECS[key], t = THRESHOLDS;
@@ -423,7 +423,12 @@ export function measure(key, lm, aspect = 1) {
   m.liftA = liftOf(n.ankle);
   // 엎드려 팔·다리 들기: 어깨-엉덩이 선에서 손목·발목이 떨어진 거리(몸통 길이 대비, 부호 있음 → 준비 자세 기준 변화량을 씀)
   m.armLift = offLine(hp, sh, mid(J.L.wrist, J.R.wrist)) / torso;
-  m.legLift = offLine(sh, hp, an) / torso;
+  // v48: 엎드려 팔 들기는 '엉덩이(바닥에 붙어 있음)보다 팔꿈치·손목이 얼마나 위로 올라갔나'로 봄.
+  // 몸통 선 기준(armLift)은 가슴이 같이 들리면 팔꿈치도 같이 움직여 거의 0이 되고, 가려진 반대쪽 손목 때문에 흔들려서 실제 사람에서 안 셌음
+  m.upE = (n.hip.y - n.elbow.y) / torso;
+  m.upW = ok(n.wrist) ? (n.hip.y - n.wrist.y) / torso : null;
+  // v48: 다리 들기도 가까운 쪽 발목이 엉덩이보다 얼마나 올라갔나로 (가려진 반대쪽 다리가 흔들려도 괜찮게)
+  m.legLift = (n.hip.y - n.ankle.y) / torso;
   m.feet = ok(J.L.ankle) && ok(J.R.ankle) ? dist(J.L.ankle, J.R.ankle) / (dist(J.L.hip, J.R.hip) || 0.01) : null; // 발이 잘리면 발 벌림은 안 봄
   void kn;
   return m;
@@ -445,7 +450,7 @@ export class MoveCounter {
     this.t = { ...THRESHOLDS, ...S, depth: S.depth && S.depth[this.mode], holdMs: S.holdMs && S.holdMs[this.mode], on: S.on && S.on[this.mode], ...(S.hold ? S.hold[this.mode] : {}) };
   }
   reset() {
-    Object.assign(this, { state: 'setup', lastGood: null, lastGoodAt: 0, reps: 0, attempts: 0, repLog: [], readySince: null, readyVals: [], lostSince: null, s: null, cur: null, leaveAt: null, lastRepAt: -1e9, base: null, baseLeg: null, shallowSpoken: 0,
+    Object.assign(this, { state: 'setup', readyEma: null, lastGood: null, lastGoodAt: 0, viewBadSince: null, diag: { frames: 0, vis: 0, ready: false, best: null }, reps: 0, attempts: 0, repLog: [], readySince: null, readyVals: [], lostSince: null, s: null, cur: null, leaveAt: null, lastRepAt: -1e9, base: null, baseLeg: null, shallowSpoken: 0,
       held: 0, lastAt: null, faultSince: null, fault: null, faultSpokenAt: -1e9, faultCount: {}, limb: [false, false], one: false, lastMoveAt: -1e9, moveSpokenAt: -1e9, startAt: null });
   }
   get kind() { return this.S.kind; }
@@ -457,32 +462,39 @@ export class MoveCounter {
     return this.s;
   }
   _past(x, th) { return this.S.dir < 0 ? x <= th : x >= th; }
-  _viewOk(m) { return this.S.view === 'any' || (this.S.view === 'front' ? m.spread > 0.3 : m.sideView); } // 정면: 어깨·엉덩이 너비가 몸통의 30% 넘게 보이면
+  _viewOk(m) { return m.viewGrace || this.S.view === 'any' || (this.S.view === 'front' ? m.spread > 0.3 : m.sideView); } // 정면: 어깨·엉덩이 너비가 몸통의 30% 넘게 보이면
 
   update(m, now) {
     const t = this.t;
     // v47: 0.7초 안쪽으로 잠깐 놓치면 직전 자세로 이어감 (버티기 시간이 툭툭 끊기지 않게)
+    // v48: 옆모습/정면 판정은 가려진 반대쪽 어깨·엉덩이가 떨려서 순간적으로 틀릴 때가 많음 → 0.8초 넘게 이어질 때만 '방향이 틀림'으로 봄
+    if (m && m.visible) {
+      if (this._viewOk(m)) this.viewBadSince = null;
+      else { if (this.viewBadSince == null) this.viewBadSince = now; if (now - this.viewBadSince < 800) m = { ...m, viewGrace: true }; }
+    }
     if (m && m.visible && this._viewOk(m)) { this.lastGood = m; this.lastGoodAt = now; }
     else if (this.state !== 'setup' && this.lastGood && now - this.lastGoodAt < t.graceMs) m = this.lastGood;
+    this.diag.frames += 1; if (m && m.visible) this.diag.vis += 1;
     if (!m || !m.visible || !this._viewOk(m)) {
       this.readySince = null; this.readyVals = []; this.lastAt = null;
       if (this.state !== 'setup' && this.kind === 'rep') {
         if (this.lostSince === null) this.lostSince = now;
-        if (now - this.lostSince > t.lostMs) { this.state = 'setup'; this.cur = null; this.s = null; return { event: 'lost' }; }
+        if (now - this.lostSince > t.lostMs) { this.state = 'setup'; this.cur = null; this.s = null; this.readyEma = null; return { event: 'lost' }; }
       }
       return { event: m && m.visible ? 'not_side' : 'not_visible', reason: m && m.reason };
     }
     this.lostSince = null;
-    if (this.kind === 'hold') return this._hold(m, now);
-    if (this.kind === 'cardio') return this._cardio(m, now);
-    return this._rep(m, now);
+    const r = this.kind === 'hold' ? this._hold(m, now) : this.kind === 'cardio' ? this._cardio(m, now) : this._rep(m, now);
+    if (r.event === 'ready') this.diag.ready = true;
+    return r;
   }
 
   // ─ 횟수 ─
   _rep(m, now) {
     const t = this.t, S = this.S;
     if (this.state === 'setup') {
-      const raw = this._raw(m);
+      // v48: 준비 자세·멈춤 판단은 살짝 부드럽게 한 값으로 (관절 위치가 프레임마다 조금씩 떨려서 실제 사람은 '멈춤'이 안 잡히던 문제)
+      const raw0 = this._raw(m), raw = this.readyEma = this.readyEma == null ? raw0 : this.readyEma * 0.5 + raw0 * 0.5;
       // 기준값 종목은 준비 자세 값 자체를 0으로 잡으므로 '가만히 있는지'만 봄
       const inPose = S.base ? true : S.dir < 0 ? raw >= t.ready : raw <= t.ready;
       if (!inPose) { this.readySince = null; this.readyVals = []; return { event: 'setup', hint: 'pose' }; }
@@ -500,6 +512,7 @@ export class MoveCounter {
       return { event: 'setup', hint: 'hold', progress: (now - this.readySince) / t.readyMs };
     }
     const s = this._sig(m);
+    this._best(s);
     if (this.state === 'up') {
       // 기준값 종목: 준비 자세보다 더 '낮은' 값이 나오면 기준을 천천히 따라 내림 (들고 있을 때 기준이 잡혀도 회복)
       if (S.base === true && s < 0) this.base += s * 0.2;
@@ -616,7 +629,7 @@ export class MoveCounter {
       if (!this.limb[i] && past(v, t.on)) { this.limb[i] = true; rep = { limb: i }; }
       else if (this.limb[i] && !past(v, t.off)) this.limb[i] = false;
     };
-    if (S.legs) S.legs(m).forEach((v, i) => step(i, v)); else step(0, S.one(m));
+    if (S.legs) S.legs(m).forEach((v, i) => { step(i, v); this._best(v); }); else { const v = S.one(m); step(0, v); this._best(v); }
     const ff = S.fault ? S.fault(m, t) : null;
     if (ff) this.faultCount[ff] = (this.faultCount[ff] || 0) + 1;
     for (const ck of S.checks || []) if (rep && ck.bad(m)) this.faultCount[ck.k] = (this.faultCount[ck.k] || 0) + 1;
@@ -634,6 +647,18 @@ export class MoveCounter {
     }
     this.held += dt;
     return { event: 'hold', sec: this.held / 1000 };
+  }
+
+  // v48: 한 번도 못 셌을 때 이유를 알려 주려고 세트 동안 가장 많이 움직인 값을 기록
+  _best(v) { const d = this.diag; if (v == null || isNaN(v)) return; d.best = d.best == null ? v : this.S.dir < 0 ? Math.min(d.best, v) : Math.max(d.best, v); }
+  // why: 'unseen'(몸이 거의 안 잡힘) | 'notReady'(준비 자세가 안 잡힘) | 'small'(움직임이 기준보다 작음) | null
+  diagnose() {
+    const d = this.diag, t = this.t, S = this.S;
+    const need = S.kind === 'cardio' ? t.on : S.kind === 'rep' ? t.start : null;
+    const visPct = d.frames ? Math.round(d.vis / d.frames * 100) : 0;
+    const why = d.frames < 20 ? null : visPct < 40 ? 'unseen' : !d.ready ? 'notReady' : need != null && d.best != null && !(S.dir < 0 ? d.best <= need : d.best >= need) ? 'small' : null;
+    const f = (v) => v == null ? '-' : Math.abs(v) < 2 ? v.toFixed(2) : Math.round(v);
+    return { why, visPct, ready: d.ready, best: d.best, need, text: `인식 ${visPct}% · 준비 ${d.ready ? '됨' : '안 됨'} · 최대 ${f(d.best)} / 기준 ${f(need)}` };
   }
 
   // 버티기·유산소 세트 기록 한 줄 (요약·점수용)

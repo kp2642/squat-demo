@@ -1,10 +1,10 @@
 // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식 (v40: app.js에서 분리)
 // C: 앱 상태를 읽는 함수들 { pstyle(), counter() }
-import * as SQ from './squat-logic.js?v=47';
-import * as PU from './pushup-logic.js?v=47';
-import * as GM from './goodmorning-logic.js?v=47';
-import * as MV from './move-logic.js?v=47';
-import { GX, PLACE } from './data-ko.js?v=47';
+import * as SQ from './squat-logic.js?v=48';
+import * as PU from './pushup-logic.js?v=48';
+import * as GM from './goodmorning-logic.js?v=48';
+import * as MV from './move-logic.js?v=48';
+import { GX, PLACE } from './data-ko.js?v=48';
 export const JUDGED3 = ['squat', 'pushup', 'goodmorning'];
 export function makeExercises(C) {
   // 종목별 설정: 판정 로직, 안내 문구, 그리기, 결과 기록 형식
@@ -97,7 +97,7 @@ export function makeExercises(C) {
       Counter: function (md) { return new MV.MoveCounter(key, md); },
       intro: `${g[1]} ${S.place} ${go} 영상은 이 휴대폰 밖으로 나가지 않아요.`,
       tips: floor ? ['가로 1.5m', '바닥'] : ['1.5m', '허리 높이'], minSpan: floor ? 0.2 : 0.3, axis: S.axis,
-      core: () => [11, 23, 25, 27], cut: () => MV.needIdx(key), down: MV.downOf(key), modeNote: S.note, // v47: cut = 화면 안에 꼭 있어야 하는 관절
+      core: () => [11, 23, 25, 27], cut: () => MV.needIdx(key), down: MV.downOf(key), modeNote: S.note, // v48: cut = 화면 안에 꼭 있어야 하는 관절
       startSay: `${S.place} ${S.setupMsg}.`.replace('..', '.'),
       startStatus: S.view === 'front' ? '정면을 보고 서 주세요. 손발은 조금 잘려도 괜찮아요' : '옆모습이 보이게, 어깨부터 발목까지 화면에 들어오게 해주세요',
       notSide: S.view === 'front' ? ['정면을 보고 서주세요', '정면을 봐 주세요'] : ['몸 옆면이 카메라를 향하게 해주세요', '옆모습이 보이게 해주세요'],

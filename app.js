@@ -1,10 +1,10 @@
-import * as SQ from './squat-logic.js?v=47';
-import * as PL from './plan.js?v=47';
-import * as PU from './pushup-logic.js?v=47';
-import * as GM from './goodmorning-logic.js?v=47';
-import { NUM, WARMUP, COOLDOWN, PLACE, GX, PLACE_G, STYLE_NAME_, STYLE_NAME, GOAL_NAME, RPE, PARQ, SIDE_KO, iyeyo, PHASE, WEEKS_NOTE, PART_KO, COND_KO } from './data-ko.js?v=47';
-import { makeExercises, JUDGED3 } from './exercises.js?v=47';
-import * as MV from './move-logic.js?v=47';
+import * as SQ from './squat-logic.js?v=48';
+import * as PL from './plan.js?v=48';
+import * as PU from './pushup-logic.js?v=48';
+import * as GM from './goodmorning-logic.js?v=48';
+import { NUM, WARMUP, COOLDOWN, PLACE, GX, PLACE_G, STYLE_NAME_, STYLE_NAME, GOAL_NAME, RPE, PARQ, SIDE_KO, iyeyo, PHASE, WEEKS_NOTE, PART_KO, COND_KO } from './data-ko.js?v=48';
+import { makeExercises, JUDGED3 } from './exercises.js?v=48';
+import * as MV from './move-logic.js?v=48';
 
 const EXERCISES = makeExercises({ pstyle: () => pstyle, counter: () => counter });
 let exercise = 'squat', pstyle = 'knees', flow = 'session', session = null;
@@ -113,14 +113,14 @@ async function start() {
   const alt = !!(GX[exercise] && GX[exercise][4]);
   const sided = !!(it && PL.EXDEF[it.ex] && PL.EXDEF[it.ex].side);
   // 양쪽 번갈아 하는 종목(뒤로 런지·버드독·데드버그)은 목표가 '한쪽 기준'이라 양쪽 합계로 셈
-  cs = { sides: sided && !alt ? ['R', 'L'] : [null], si: 0, logs: [], done: [], said: -1, wait: false, closed: false, mul: sided && alt ? 2 : 1 };
+  cs = { t0: performance.now(), hinted: false, sides: sided && !alt ? ['R', 'L'] : [null], si: 0, logs: [], done: [], said: -1, wait: false, closed: false, mul: sided && alt ? 2 : 1 };
   target *= cs.mul;
   $('count').innerHTML = isSecEx() ? `0<small>초 / ${target}</small>` : `0<small> / ${target}</small>`;
   sideChip();
   $('noCamBtn').style.display = it && GX[exercise] ? 'block' : 'none';
   setStatus(ultraMissing ? '초광각 카메라를 찾지 못해 일반 뒷면 카메라로 시작해요' : EX().startStatus, ultraMissing);
   if (ultraMissing) say('초광각 카메라를 찾지 못해 일반 뒷면 카메라로 시작해요');
-  show('live'); running = true; notVisibleSince = performance.now(); guide = { k: null, since: 0, spokenK: null, spokenAt: 0, guided: false };
+  show('live'); demoShow(true); running = true; notVisibleSince = performance.now(); guide = { k: null, since: 0, spokenK: null, spokenAt: 0, guided: false };
   // 새 종목의 첫 세트는 하는 법을 한 번 말해 줌 (다음 세트부터는 자리 안내만)
   const how = it && it.set === 1 && GX[exercise] ? `${EX().name}. ${GX[exercise][1]} ` : '';
   say(how + startSayOf(it) + (cs.sides[0] ? ` ${SIDE_KO[cs.sides[0]]}부터 해요.` : ''));
@@ -177,7 +177,7 @@ function framing(up) {
   const L = EX().core(), Rr = L.map(i => i + 1);
   const vis = (ids) => ids.reduce((t, i) => t + (up.lm[i].visibility ?? 0), 0);
   const nearR = vis(L) < vis(Rr), all = (nearR ? Rr : L).map(i => up.lm[i]);
-  // v47: 잘림 검사는 그 종목에 꼭 필요한 관절만 (거리 검사는 어깨~발목 길이로)
+  // v48: 잘림 검사는 그 종목에 꼭 필요한 관절만 (거리 검사는 어깨~발목 길이로)
   const pts = EX().cut ? EX().cut().map(i => up.lm[nearR ? i + 1 : i]) : all;
   const ax = EX().axis, cross = ax === 'y' ? 'x' : 'y';
   const along = all.map(p => p[ax]), span = Math.max(...along) - Math.min(...along);
@@ -302,6 +302,12 @@ function loop() {
         : '전신 인식 안 됨 (' + (m ? m.reason : '') + ')';
     }
     const r = cs && cs.wait ? { event: 'wait' } : counter.update(m, now);
+    // v48: 15초 넘게 한 번도 못 세면 한 번만 알려 줌 (말없이 0회로 끝나지 않게)
+    if (cs && !cs.hinted && session && counter.diag && counter.kind !== 'hold' && !counter.reps && now - cs.t0 > 15000) {
+      cs.hinted = true; const why = counter.diagnose().why;
+      const msg = why === 'notReady' ? '시작 자세로 1초쯤 가만히 멈춰 주세요.' : why === 'small' ? '동작을 조금 더 크게 해 보세요.' : '몸이 화면에 들어오는지 확인해 주세요.';
+      say(`아직 한 번도 못 셌어요. ${msg} 그래도 안 되면 카메라 없이 하기를 눌러 구령에 맞춰 해도 돼요.`, true); setStatus('아직 못 셌어요. ' + msg, true);
+    }
     const fr = r.event === 'not_visible' || (r.event === 'setup' && r.hint !== 'hold') ? framing(up) : { k: 'ok' };
     if (r.event === 'not_visible') {
       if (now - notVisibleSince > 1000) speakGuide(fr.k === 'ok' ? { k: 'dim', text: '어깨부터 발목까지 화면에 들어오게 해주세요', say: '어깨부터 발목까지 보이게 해주세요' } : fr, now);
@@ -391,7 +397,7 @@ function sideChip() {
 }
 
 function stopCamera() {
-  running = false; cancelAnimationFrame(rafId);
+  running = false; cancelAnimationFrame(rafId); demoShow(false);
   if (stream) stream.getTracks().forEach(t => t.stop()); stream = null;
 }
 
@@ -477,7 +483,7 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EX().line(r)} / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `${EX().name} 데모 v47 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `${EX().name} 데모 v48 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
@@ -485,7 +491,7 @@ const exName = (ex, style) => (EXERCISES[ex] ? EXERCISES[ex].name : GX[ex][0]) +
 const isSec = (ex) => PL.EXDEF[ex].unit === 'sec';
 const fmtN = (ex, n) => `${n}${isSec(ex) ? '초' : '회'}${PL.EXDEF[ex].side ? ' (한쪽)' : ''}`;
 const placeFull = (ex) => PLACE[ex] || PLACE_G[GX[ex][2]];
-// v47: 휴대폰 자리. 'one' = 세션 내내 한 곳(바닥에 세로로 기대 둠)에 두고 몸 방향만 바꿈(기본), 'each' = 종목마다 맞춤 자리
+// v48: 휴대폰 자리. 'one' = 세션 내내 한 곳(바닥에 세로로 기대 둠)에 두고 몸 방향만 바꿈(기본), 'each' = 종목마다 맞춤 자리
 let spot = 'one'; try { spot = localStorage.getItem('spot') || 'one'; } catch {}
 const BODY_FIX = { wallsit: '휴대폰에 옆모습이 보이는 쪽 벽에 등을 대요.', chairsquat: '의자를 등 뒤에 두고 옆모습이 보이게 서요.', goodmorning: '옆모습이 보이게 서요. 숙일 때 앞쪽에 공간이 필요해요. 손은 가슴에 X자로.' };
 // 자리 안내에서 '휴대폰을 어디에 어떻게' 부분을 뺀 몸 방향 안내
@@ -536,7 +542,7 @@ function buildPlan() {
   todayWk = tp.wk;
   // v43: 오늘 컨디션에 맞춰 오늘 운동만 조절 (빠른 체험 제외)
   const adj = !quick && cond ? PL.adjustToday(store.plan || defaultPlan(), tp, cond) : null;
-  // v47: 복귀 미션 (컨디션 화면에서 뺄 수 있음)
+  // v48: 복귀 미션 (컨디션 화면에서 뺄 수 있음)
   const ms = !quick && cond && cond.mission !== false ? PL.mission(store.plan || defaultPlan(), store.history, tp, cond) : null;
   for (const x of [...(adj ? adj.items : tp.items), ...(ms && ms.item ? [ms.item] : [])])
     for (let n = 1, sets = quick ? 1 : x.sets; n <= sets; n++)
@@ -772,7 +778,7 @@ function showMove([, , , key, side, dir]) {
   const f = $('tPrev'); if (!key) { f.style.display = 'none'; return; }
   f.style.display = 'block';
   if (movesReady && f.contentWindow) f.contentWindow.postMessage({ type: 'move', ex: key, side, dir }, location.origin);
-  else f.src = `guide.html?v=47&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
+  else f.src = `guide.html?v=48&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
 }
 function runTimer(it) {
   show('timer');
@@ -802,7 +808,7 @@ function endTimer() {
 $('tPause').onclick = () => { tm.paused = !tm.paused; $('tPause').textContent = tm.paused ? '계속하기' : '일시정지'; };
 $('tSkip').onclick = () => { tm.left = 0; };
 $('tSkipAll').onclick = () => { tm.k = tm.it.steps.length; tm.left = 0; };
-$('tQuit').onclick = () => { clearInterval(tm.iv); finishSession(); };
+$('tQuit').onclick = () => confirmTap($('tQuit'), $('tQuit').dataset.label || ($('tQuit').dataset.label = $('tQuit').textContent), () => { clearInterval(tm.iv); finishSession(); });
 
 // v36: 음성 안내 세트 (카메라 없이 구령·버티기 타이머). 시범 동작과 같은 박자로 셈
 const doneOf = (x) => x.done != null ? x.done : x.log.filter(r => r.counted).length;
@@ -811,7 +817,7 @@ $('gPrev').addEventListener('load', () => { gReady = true; });
 function gMove(ex, side) {
   const f = $('gPrev');
   if (gReady && f.contentWindow) f.contentWindow.postMessage({ type: 'move', ex, side }, location.origin);
-  else f.src = `guide.html?v=47&ex=${ex}&embed=1&nocap=1&side=${side}`;
+  else f.src = `guide.html?v=48&ex=${ex}&embed=1&nocap=1&side=${side}`;
 }
 function runGuided(it) {
   show('gset');
@@ -896,14 +902,32 @@ $('gQuit').onclick = () => { clearInterval(gs.iv); finishSession(); };
 
 // 세트 끝 → 기록 → 휴식
 function sessionSetDone() {
-  running = false; cancelAnimationFrame(rafId);
+  running = false; cancelAnimationFrame(rafId); demoShow(false);
   const it = session.items[session.i];
   if (!cs.closed) { cs.logs.push(...curLog()); cs.done.push(curDone()); cs.closed = true; }
   const log = cs.logs, done = Math.min(...cs.done);
-  session.sets.push({ slot: it.slot, ex: it.ex, mission: !!it.mission, set: it.set, of: it.of, target: target / (cs.mul || 1), log, done, rpe: null, cue: CUE_TEXT, norep: NOREP_TEXT, mode, style: it.style || pstyle });
+  session.sets.push({ slot: it.slot, ex: it.ex, mission: !!it.mission, set: it.set, of: it.of, target: target / (cs.mul || 1), log, done, rpe: null, cue: CUE_TEXT, norep: NOREP_TEXT, mode, style: it.style || pstyle, diag: counter.diagnose ? counter.diagnose() : null });
   showRest();
 }
 let rs = null;
+// v48: 운동 중에도 시범이 보이게 (친구 피드백: 카메라 켜지면 글씨만 나와서 동작을 까먹음)
+const demoSrc = (ex, style) => JUDGED3.includes(ex) ? `guide.html?v=48&ex=${ex}&embed=1&lite=1${ex === 'pushup' ? '&style=' + ((style || pstyle) === 'full' ? 'full' : 'knees') : ''}` : `guide.html?v=48&ex=${ex}&embed=1&nocap=1&lite=1`;
+let demoMode = 'small'; try { demoMode = localStorage.getItem('demoPiP') || 'small'; } catch {}
+function demoShow(on) {
+  const d = $('demo'), f = $('demoF');
+  if (!on || !GX[exercise] && !JUDGED3.includes(exercise)) { d.style.display = 'none'; f.removeAttribute('src'); return; }
+  d.style.display = 'block'; d.className = 'demo' + (demoMode === 'small' ? '' : ' ' + demoMode);
+  const src = demoSrc(exercise, pstyle);
+  if (demoMode !== 'off' && f.getAttribute('src') !== src) f.setAttribute('src', src);
+  if (demoMode === 'off') f.removeAttribute('src');
+}
+$('demo').onclick = () => { demoMode = { small: 'big', big: 'off', off: 'small' }[demoMode]; try { localStorage.setItem('demoPiP', demoMode); } catch {} demoShow(true); };
+// v48: 한 번도 못 센 세트는 왜 그런지 한 줄로 (친구 테스트에서 W자·팔 벌려 뛰기가 이유 없이 0회로 끝남)
+const WHY0 = {
+  unseen: '<b>몸이 화면에 거의 안 잡혔어요.</b><br>휴대폰에서 2m쯤 떨어져, 화면에 몸이 들어오는지 확인해 주세요.',
+  notReady: '<b>시작 자세가 잡히지 않았어요.</b><br>시작 자세로 1초쯤 가만히 멈추면 그때부터 세요.',
+  small: '<b>움직임은 보였지만 기준보다 작았어요.</b><br>동작을 조금 더 크게 해 보세요. 그래도 안 세지면 운동 중 화면의 "카메라 없이 하기"를 눌러 구령에 맞춰 해도 돼요.',
+};
 function showRest() {
   const done = session.sets[session.sets.length - 1], it = session.items[session.i], nx = session.items[session.i + 1];
   const counted = doneOf(done), avg = done.log.length ? Math.round(done.log.reduce((a, r) => a + r.score, 0) / done.log.length) : null;
@@ -911,14 +935,14 @@ function showRest() {
   // 이번 세트에서 가장 많이 나온 지적 하나
   const cnt = {}; done.log.forEach(r => (r.faults || []).forEach(f => { if (f !== 'tempo' || true) cnt[f] = (cnt[f] || 0) + 1; }));
   const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
-  $('rScore').innerHTML = done.guided ? (counted >= done.target ? `목표 ${fmtN(done.ex, done.target)}를 다 했어요.` : `목표 ${fmtN(done.ex, done.target)} 중 ${fmtN(done.ex, counted)} 했어요. 횟수보다 자세가 먼저예요.`) : avg == null ? '이번 세트는 인식된 반복이 없어요.' : `<b>자세 점수 평균 ${avg}점</b>${done.log.length > counted ? ` · 안 센 반복 ${done.log.length - counted}회` : ''}<br>${top ? `다음 세트에서는: ${done.cue[top[0]] || top[0]} (${top[1]}회 지적)` : '지적 없이 좋았어요.'}`;
+  $('rScore').innerHTML = done.guided ? (counted >= done.target ? `목표 ${fmtN(done.ex, done.target)}를 다 했어요.` : `목표 ${fmtN(done.ex, done.target)} 중 ${fmtN(done.ex, counted)} 했어요. 횟수보다 자세가 먼저예요.`) : !counted && done.diag && WHY0[done.diag.why] ? WHY0[done.diag.why] : avg == null ? '이번 세트는 인식된 반복이 없어요.' : `<b>자세 점수 평균 ${avg}점</b>${done.log.length > counted ? ` · 안 센 반복 ${done.log.length - counted}회` : ''}<br>${top ? `다음 세트에서는: ${done.cue[top[0]] || top[0]} (${top[1]}회 지적)` : '지적 없이 좋았어요.'}`;
   [...$('rpe').children].forEach(b => b.classList.remove('sel'));
   $('rpeNote').textContent = '답에 따라 다음 세트의 횟수를 조절해요.';
   const changing = nx && nx.kind === 'set' && nx.ex !== done.ex;
   if (nx && nx.kind === 'set') {
     $('rNextT').textContent = `다음: ${exName(nx.ex, nx.style)} ${nx.set} / ${nx.of}세트 · ${fmtN(nx.ex, tgt(nx))}`;
     $('rPlace').textContent = changing ? placeOf(nx.ex, done.ex) : '같은 자리에서 이어서 해요.';
-    const src = JUDGED3.includes(nx.ex) ? `guide.html?ex=${nx.ex}&embed=1${nx.ex === 'pushup' ? '&style=' + ((nx.style || pstyle) === 'full' ? 'full' : 'knees') : ''}` : `guide.html?v=47&ex=${nx.ex}&embed=1&nocap=1`;
+    const src = JUDGED3.includes(nx.ex) ? `guide.html?ex=${nx.ex}&embed=1${nx.ex === 'pushup' ? '&style=' + ((nx.style || pstyle) === 'full' ? 'full' : 'knees') : ''}` : `guide.html?v=48&ex=${nx.ex}&embed=1&nocap=1`;
     if ($('rPrev').getAttribute('src') !== src) $('rPrev').setAttribute('src', src);
     $('rPrev').style.display = 'block';
   } else { $('rNextT').textContent = '다음: 쿨다운 5분'; $('rPlace').textContent = '마지막 세트까지 끝났어요. 체감 강도를 누르고 쿨다운을 시작하세요.'; $('rPrev').style.display = 'none'; $('rPrev').removeAttribute('src'); }
@@ -942,7 +966,19 @@ function endRest() { clearInterval(rs.iv); rs.iv = null; session.i += 1; runItem
 $('rPlus').onclick = () => { rs.left += 30; rs.warned = rs.left <= 10; };
 $('rSkip').onclick = endRest;
 $('rGo').onclick = endRest;
-$('rQuit').onclick = () => { clearInterval(rs.iv); finishSession(); };
+// v48: 잘못 눌러도 되돌릴 수 있게 — 그만하기는 두 번 눌러야 하고, 방금 세트는 다시 할 수 있음
+function confirmTap(btn, label, go) {
+  if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = label; return go(); }
+  btn.dataset.armed = '1'; btn.textContent = '정말 그만할까요? 한 번 더 누르면 끝나요';
+  setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = label; } }, 3000);
+}
+$('rQuit').onclick = () => confirmTap($('rQuit'), '운동 그만하기', () => { clearInterval(rs.iv); finishSession(); });
+$('rRedo').onclick = () => {
+  clearInterval(rs.iv); rs.iv = null;
+  const last = session.sets.pop();
+  if (last && last.rpe) session.adj[last.ex] = (session.adj[last.ex] || 0) - RPE[last.rpe][1]; // 그 세트에 누른 체감 강도 조절도 되돌림
+  runItem();
+};
 $('rpe').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   [...$('rpe').children].forEach(c => c.classList.toggle('sel', c === b));
@@ -1012,9 +1048,10 @@ function finishSession() {
 $('dHome').onclick = () => { session = null; cond = null; show('intro'); $('startBtn').disabled = false; applyFlow(); };
 $('dCopy').onclick = async () => {
   const S = session; if (!S) return;
-  const lines = [`오늘의 운동 데모 v47 결과 [${mode}·구성 ${S.wk}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
+  const lines = [`오늘의 운동 데모 v48 결과 [${mode}·구성 ${S.wk}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
   for (const x of S.sets) {
     lines.push(`■ ${exName(x.ex, x.style)} ${x.set}/${x.of}세트 (목표 ${fmtN(x.ex, x.target)}, 체감 ${x.rpe ? RPE[x.rpe][0] : '-'})${x.guided ? ` · 음성 안내 · ${fmtN(x.ex, x.done)} 함` : ''}`);
+    if (x.diag) lines.push(`  (${x.diag.text})`);
     if (!x.guided) x.log.forEach(r => lines.push(`${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EXERCISES[x.ex].line(r)}`));
   }
   try { await navigator.clipboard.writeText(lines.join('\n')); $('dCopy').textContent = '복사했어요'; } catch { $('dCopy').textContent = '복사하지 못했어요'; }

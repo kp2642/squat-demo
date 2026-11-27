@@ -680,8 +680,10 @@ const CAPS_KNEES = ['손목은 어깨 아래, 머리부터 무릎까지 일직�
 // ── 3D 장면 ──
 const canvas = $('stage');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// v48: lite=1 — 운동 중 카메라 화면 구석에 띄우는 작은 시범. 자세 인식이 느려지지 않게 해상도·그림자·초당 장면 수를 낮춤
+const LITE = q.get('lite') === '1';
+renderer.setPixelRatio(LITE ? 1 : Math.min(2, devicePixelRatio || 1));
+renderer.shadowMap.enabled = !LITE; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(32, 4 / 3, 0.1, 50);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8a93a6, 1.4));
@@ -815,6 +817,7 @@ function phaseAt(time) {
 }
 let lastK = -1;
 function frame(now) {
+  if (LITE && now - last < 66) { requestAnimationFrame(frame); return; }
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   if (playing) t += dt * speed;
   if (MOVES[ex]) { pose(MOVES[ex](t)); resize(); placeCamera(); renderer.render(scene, camera); requestAnimationFrame(frame); return; }
