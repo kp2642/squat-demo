@@ -285,6 +285,20 @@ export function adjustToday(plan, tp, cond) {
   // rows: 원래 종목마다 {from, to(바뀐 뒤 종목, 빠지면 null)} — 화면에서 바뀐 곳을 줄 그어 보여 줌
   return { items, removed, added, swapped, greatBlocked, rows: rows.map(r => ({ from: r.from, to: r.i >= 0 ? items[r.i] : null })) };
 }
+// v46: 복귀 미션 — 정해진 날을 건너뛰고 돌아온 날, 마지막에 1분 안팎의 가벼운 미션 하나(선택, 언제든 뺄 수 있음)
+// 벌칙이 아니라 '돌아온 걸 반기는' 느낌: 벌로 느끼면 건너뛴 뒤 앱을 아예 안 여는 일이 많아짐(행동과학)
+// 건너뜀: 마지막 운동(빠른 체험 제외) 뒤 지난 날 > 주 횟수로 본 간격(7÷횟수 올림) + 1  예) 주 3회 → 5일 이상
+// 회복 주, 피곤하거나 아픈 곳을 고른 날은 없음. 오늘 구성에 없는 코어·유산소 칸에서 1세트
+export function mission(plan, history = [], tp, cond, today = new Date()) {
+  const last = [...history].reverse().find(h => !h.quick); if (!last) return null;
+  const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate()), gap = Math.round((t0 - parseDay(last.day)) / 864e5);
+  if (gap <= Math.ceil(7 / (plan.days || 3)) + 1) return null;
+  if (tp.recovery || (cond && ((cond.parts || []).length || ['tired', 'low'].includes(cond.level)))) return { gap, off: true };
+  const used = new Set(tp.items.map(x => x.slot));
+  const k = ['coreA', 'cardio', 'abs', 'coreC'].find(k => !used.has(k) && plan.slots[k]);
+  if (!k) return null;
+  return { gap, item: { ...itemOf(plan, k, false), sets: 1, mission: true } };
+}
 // 같은 관절 통증이 최근 기록(빠른 체험 제외)에서 이번까지 몇 번 연속인지 — 3번이면 진료 권유
 export function painStreak(history, parts) {
   const real = history.filter(h => !h.quick), out = {};

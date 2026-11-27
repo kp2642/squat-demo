@@ -113,3 +113,4 @@ details.opts>div{margin-top:12px}
 .cplan{margin:8px 0 6px;padding:0;gap:6px}.cplan li{background:#fff}.cplan li.chg b,.cplan li.chg span{color:var(--blue)}.cplan li s{color:var(--muted);font-weight:400}.cplan li.drop{opacity:.7}
 .pace{margin-top:10px;padding:10px 12px;border-radius:10px;background:#FFF4E5}
 .cplan li.chg,.cplan li.drop{flex-direction:column;gap:2px}
+.mission{margin-top:10px;padding:10px 12px;border-radius:10px;background:#EEF3FF;font-size:14px;line-height:1.55}.mission.off{background:#F2F2F2;color:var(--muted)}.mission .link{display:block;margin-top:2px;padding:4px 0;font-size:13px;color:var(--blue)}

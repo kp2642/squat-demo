@@ -1,10 +1,10 @@
-import * as SQ from './squat-logic.js?v=45';
-import * as PL from './plan.js?v=45';
-import * as PU from './pushup-logic.js?v=45';
-import * as GM from './goodmorning-logic.js?v=45';
-import { NUM, WARMUP, COOLDOWN, PLACE, GX, PLACE_G, STYLE_NAME_, STYLE_NAME, GOAL_NAME, RPE, PARQ, SIDE_KO, iyeyo, PHASE, WEEKS_NOTE, PART_KO, COND_KO } from './data-ko.js?v=45';
-import { makeExercises, JUDGED3 } from './exercises.js?v=45';
-import * as MV from './move-logic.js?v=45';
+import * as SQ from './squat-logic.js?v=46';
+import * as PL from './plan.js?v=46';
+import * as PU from './pushup-logic.js?v=46';
+import * as GM from './goodmorning-logic.js?v=46';
+import { NUM, WARMUP, COOLDOWN, PLACE, GX, PLACE_G, STYLE_NAME_, STYLE_NAME, GOAL_NAME, RPE, PARQ, SIDE_KO, iyeyo, PHASE, WEEKS_NOTE, PART_KO, COND_KO } from './data-ko.js?v=46';
+import { makeExercises, JUDGED3 } from './exercises.js?v=46';
+import * as MV from './move-logic.js?v=46';
 
 const EXERCISES = makeExercises({ pstyle: () => pstyle, counter: () => counter });
 let exercise = 'squat', pstyle = 'knees', flow = 'session', session = null;
@@ -385,7 +385,7 @@ const isSecEx = () => counter.kind === 'hold' || counter.kind === 'cardio';
 function sideChip() {
   const it = session && session.items[session.i];
   $('setChip').style.display = it ? 'block' : 'none';
-  if (it) $('setChip').textContent = `${EX().name} ${it.set} / ${it.of}세트` + (cs.sides[cs.si] ? ` · ${SIDE_KO[cs.sides[cs.si]]}` : cs.mul > 1 ? ' · 양쪽 번갈아' : '');
+  if (it) $('setChip').textContent = (it.mission ? '🎁 복귀 미션 · ' : '') + `${EX().name} ${it.set} / ${it.of}세트` + (cs.sides[cs.si] ? ` · ${SIDE_KO[cs.sides[cs.si]]}` : cs.mul > 1 ? ' · 양쪽 번갈아' : '');
 }
 
 function stopCamera() {
@@ -451,6 +451,11 @@ function renderCond() {
   const n = a.items.reduce((s, x) => s + x.sets, 0);
   $('cPlan').innerHTML = `<b>오늘 운동${changed ? ` · ${changed}곳 바뀜` : ' · 플랜대로'}</b><ul class="plan cplan">${li}</ul>`
     + `<span class="note">본운동 ${a.items.length}종목 · ${n}세트. ${cond.level === 'great' ? (a.greatBlocked === 'recovery' ? '이번 주는 회복 주라 세트를 늘리지 않아요. 쉬는 동안 몸이 강해져요.' : a.greatBlocked ? '아프거나 뻐근한 곳이 있는 날은 세트를 늘리지 않아요.' : '큰 근육 종목만 오늘 한 세트씩 더 해요.') : cond.level !== 'good' ? '세트를 줄인 날은 다음 운동 횟수를 올리지 않아요.' : changed ? '플랜은 그대로고, 오늘만 바꿔요. 뺀 종목은 다음에 그대로 이어서 해요.' : ''}</span>`;
+  const ms = PL.mission(plan, store.history, tp, cond);
+  if (ms && ms.item) { const on = cond.mission !== false;
+    $('cPlan').innerHTML += `<div class="mission${on ? '' : ' off'}"><b>🎁 복귀 미션${on ? '' : ' (뺐어요)'}</b><br>${ms.gap}일 만이에요, 다시 와서 반가워요! 돌아온 기념으로 마지막에 <b>${nm(ms.item)} ${fmtN(ms.item.ex, ms.item.reps)}</b> 하나만 더 해 볼까요? 1분이면 끝나요.<button class="link" id="cMis">${on ? '오늘은 빼기' : '다시 넣기'}</button></div>`;
+    $('cMis').onclick = () => { cond.mission = !on; renderCond(); };
+  } else if (ms && ms.off) $('cPlan').innerHTML += `<div class="mission off"><b>🎁 복귀 미션은 쉬어요</b><br>${ms.gap}일 만이에요, 반가워요! 오늘은 ${tp.recovery ? '회복 주라' : '컨디션에 맞춰'} 미션 없이 가볍게 해요.</div>`;
   const pain = cond.parts.filter(p => PL.PAIN.includes(p)), st = PL.painStreak(store.history, pain), long = pain.filter(p => st[p] >= 3);
   const w = [];
   if (long.length) w.push(`<b>${long.map(p => PART_KO[p]).join('·')} 통증이 ${Math.max(...long.map(p => st[p]))}번 연속이에요.</b> 며칠 운동을 쉬고 병원이나 전문가에게 진료를 받아 보세요.`);
@@ -470,7 +475,7 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EX().line(r)} / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `${EX().name} 데모 v45 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `${EX().name} 데모 v46 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
@@ -503,9 +508,11 @@ function buildPlan() {
   todayWk = tp.wk;
   // v43: 오늘 컨디션에 맞춰 오늘 운동만 조절 (빠른 체험 제외)
   const adj = !quick && cond ? PL.adjustToday(store.plan || defaultPlan(), tp, cond) : null;
-  for (const x of adj ? adj.items : tp.items)
+  // v46: 복귀 미션 (컨디션 화면에서 뺄 수 있음)
+  const ms = !quick && cond && cond.mission !== false ? PL.mission(store.plan || defaultPlan(), store.history, tp, cond) : null;
+  for (const x of [...(adj ? adj.items : tp.items), ...(ms && ms.item ? [ms.item] : [])])
     for (let n = 1, sets = quick ? 1 : x.sets; n <= sets; n++)
-      items.push({ kind: 'set', slot: x.slot, ex: x.ex, style: x.style, set: n, of: sets, reps: quick ? (x.unit === 'sec' ? 15 : 5) : x.reps, rest: quick ? 20 : x.rest });
+      items.push({ kind: 'set', slot: x.slot, ex: x.ex, style: x.style, mission: !!x.mission, set: n, of: sets, reps: quick ? (x.unit === 'sec' ? 15 : 5) : x.reps, rest: quick ? 20 : x.rest });
   items.push({ kind: 'timer', key: 'cooldown', title: '쿨다운', steps: scale(COOLDOWN) });
   return items;
 }
@@ -737,7 +744,7 @@ function showMove([, , , key, side, dir]) {
   const f = $('tPrev'); if (!key) { f.style.display = 'none'; return; }
   f.style.display = 'block';
   if (movesReady && f.contentWindow) f.contentWindow.postMessage({ type: 'move', ex: key, side, dir }, location.origin);
-  else f.src = `guide.html?v=45&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
+  else f.src = `guide.html?v=46&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
 }
 function runTimer(it) {
   show('timer');
@@ -776,7 +783,7 @@ $('gPrev').addEventListener('load', () => { gReady = true; });
 function gMove(ex, side) {
   const f = $('gPrev');
   if (gReady && f.contentWindow) f.contentWindow.postMessage({ type: 'move', ex, side }, location.origin);
-  else f.src = `guide.html?v=45&ex=${ex}&embed=1&nocap=1&side=${side}`;
+  else f.src = `guide.html?v=46&ex=${ex}&embed=1&nocap=1&side=${side}`;
 }
 function runGuided(it) {
   show('gset');
@@ -845,7 +852,7 @@ function gFinish(early) {
   let cur = 0;
   if (early && gs.phase === 'work') cur = gs.sec ? Math.max(0, Math.round(n - gs.left)) : gs.count;
   const done = early ? Math.min(...[...gs.done, cur]) : n;
-  session.sets.push({ slot: it.slot, ex: it.ex, style: it.style, set: it.set, of: it.of, target: n, guided: true, done, log: [], rpe: null, cue: {}, norep: {} });
+  session.sets.push({ slot: it.slot, ex: it.ex, style: it.style, mission: !!it.mission, set: it.set, of: it.of, target: n, guided: true, done, log: [], rpe: null, cue: {}, norep: {} });
   if (!early) say('세트 완료!', true);
   showRest();
 }
@@ -865,7 +872,7 @@ function sessionSetDone() {
   const it = session.items[session.i];
   if (!cs.closed) { cs.logs.push(...curLog()); cs.done.push(curDone()); cs.closed = true; }
   const log = cs.logs, done = Math.min(...cs.done);
-  session.sets.push({ slot: it.slot, ex: it.ex, set: it.set, of: it.of, target: target / (cs.mul || 1), log, done, rpe: null, cue: CUE_TEXT, norep: NOREP_TEXT, mode, style: it.style || pstyle });
+  session.sets.push({ slot: it.slot, ex: it.ex, mission: !!it.mission, set: it.set, of: it.of, target: target / (cs.mul || 1), log, done, rpe: null, cue: CUE_TEXT, norep: NOREP_TEXT, mode, style: it.style || pstyle });
   showRest();
 }
 let rs = null;
@@ -883,7 +890,7 @@ function showRest() {
   if (nx && nx.kind === 'set') {
     $('rNextT').textContent = `다음: ${exName(nx.ex, nx.style)} ${nx.set} / ${nx.of}세트 · ${fmtN(nx.ex, tgt(nx))}`;
     $('rPlace').textContent = changing ? placeOf(nx.ex) : '같은 자리에서 이어서 해요.';
-    const src = JUDGED3.includes(nx.ex) ? `guide.html?ex=${nx.ex}&embed=1${nx.ex === 'pushup' ? '&style=' + ((nx.style || pstyle) === 'full' ? 'full' : 'knees') : ''}` : `guide.html?v=45&ex=${nx.ex}&embed=1&nocap=1`;
+    const src = JUDGED3.includes(nx.ex) ? `guide.html?ex=${nx.ex}&embed=1${nx.ex === 'pushup' ? '&style=' + ((nx.style || pstyle) === 'full' ? 'full' : 'knees') : ''}` : `guide.html?v=46&ex=${nx.ex}&embed=1&nocap=1`;
     if ($('rPrev').getAttribute('src') !== src) $('rPrev').setAttribute('src', src);
     $('rPrev').style.display = 'block';
   } else { $('rNextT').textContent = '다음: 쿨다운 5분'; $('rPlace').textContent = '마지막 세트까지 끝났어요. 체감 강도를 누르고 쿨다운을 시작하세요.'; $('rPrev').style.display = 'none'; $('rPrev').removeAttribute('src'); }
@@ -948,12 +955,12 @@ function finishSession() {
   // v31: 기록 저장 + 내 플랜이면 다음 운동 횟수 조절 (빠른 체험은 기록만)
   if (!S.saved && S.sets.length) {
     S.saved = true;
-    const sets = S.sets.map(x => ({ slot: x.slot, ex: x.ex, style: x.style, set: x.set, target: x.target, counted: doneOf(x), attempts: x.guided ? null : x.log.length, avg: x.log.length ? Math.round(x.log.reduce((a, r) => a + r.score, 0) / x.log.length) : null, rpe: x.rpe }));
+    const sets = S.sets.map(x => ({ slot: x.slot, ex: x.ex, style: x.style, ...(x.mission ? { mission: true } : {}), set: x.set, target: x.target, counted: doneOf(x), attempts: x.guided ? null : x.log.length, avg: x.log.length ? Math.round(x.log.reduce((a, r) => a + r.score, 0) / x.log.length) : null, rpe: x.rpe }));
     const quick = slen === 'quick';
     store.history.push({ day: PL.dayKey(new Date()), at: Date.now(), quick, wk: S.wk, mins, mode, sets, ...(S.cond && (S.cond.level !== 'good' || S.cond.parts.length) ? { cond: S.cond } : {}) });
     if (store.history.length > 300) store.history.splice(0, store.history.length - 300);
     if (!quick && store.plan) {
-      const ch = PL.progress(store.plan, sets, S.recovery);
+      const ch = PL.progress(store.plan, sets.filter(x => !x.mission), S.recovery); // 복귀 미션은 횟수 조절에 넣지 않음
       const WHY = { easy: '쉬웠다고 해서', hit: '목표를 다 채워서', same: '그대로 한 번 더', max: '한계였던 세트가 있어서', missed: '목표의 70%를 못 채워서', addSet: '충분해서 세트를 하나 늘려요', nextStep: '더 어려운 동작으로 올라가요!', phaseHold: '어려운 동작은 발전 단계(5주차)부터 해요', top: '최고 단계예요. 지금을 유지해요', recovery: '회복 주라 그대로', hard: '강도 높게라 두 칸 올려요', partial: S.cond && ['tired', 'low'].includes(S.cond.level) ? '컨디션에 맞춰 줄인 날이라 그대로' : '세트를 다 못 해서 그대로' };
       const nm = (e) => exName(PL.exOf(e), PL.styleOf(e)), u = (e, n) => `${n}${isSec(PL.exOf(e)) ? '초' : '회'}`;
       const lines = Object.values(ch).map((c) => {
@@ -969,6 +976,7 @@ function finishSession() {
       const msg = S.cond.level === 'great' && !S.cond.parts.length ? '컨디션이 좋아서 큰 근육 종목을 한 세트씩 더 했어요.' : `오늘은 컨디션(${why})에 맞춰 바꿔서 했어요. 뺀 종목은 다음에 그대로 이어서 해요.`;
       $('dNext').innerHTML = `<span class="note">${msg}</span><br>` + $('dNext').innerHTML;
     }
+    if (S.sets.some(x => x.mission)) $('dNext').innerHTML = '<b>🎁 복귀 미션 완료!</b> 돌아온 걸 환영해요. 이 흐름 그대로 이어 가요.<br>' + $('dNext').innerHTML;
     saveStore();
   }
   show('done'); say('오늘 운동 끝! 수고했어요.', true);
@@ -976,7 +984,7 @@ function finishSession() {
 $('dHome').onclick = () => { session = null; cond = null; show('intro'); $('startBtn').disabled = false; applyFlow(); };
 $('dCopy').onclick = async () => {
   const S = session; if (!S) return;
-  const lines = [`오늘의 운동 데모 v45 결과 [${mode}·구성 ${S.wk}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
+  const lines = [`오늘의 운동 데모 v46 결과 [${mode}·구성 ${S.wk}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
   for (const x of S.sets) {
     lines.push(`■ ${exName(x.ex, x.style)} ${x.set}/${x.of}세트 (목표 ${fmtN(x.ex, x.target)}, 체감 ${x.rpe ? RPE[x.rpe][0] : '-'})${x.guided ? ` · 음성 안내 · ${fmtN(x.ex, x.done)} 함` : ''}`);
     if (!x.guided) x.log.forEach(r => lines.push(`${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EXERCISES[x.ex].line(r)}`));
