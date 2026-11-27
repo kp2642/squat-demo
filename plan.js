@@ -128,6 +128,24 @@ export function planSpan(plan, today = new Date()) {
   const { week } = weekInfo(plan, today), weeks = plan.weeks || 8;
   return { week, weeks, over: week > weeks, left: Math.max(0, weeks - week + 1) };
 }
+// v44: 목표 점검 — 남은 기간에 목표까지 필요한 주당 변화가 안전 속도(감량 1%·증량 0.5%)를 넘으면 behind
+// 컨디션 때문에 덜 한 날을 다음에 몰아서 보충하지 않음(부상 위험) → 대신 기간 늘리기·목표 조정을 고르게 함
+// 3주차부터, 기록된 최근 체중 기준. 돌려주는 값: null(안내 없음) | {behind, kind, need, pct, weeksLeft, extendTo, safeTarget, cut, stale}
+export function goalPace(plan, weights = [], history = [], today = new Date()) {
+  if (!plan.target || !weights.length) return null;
+  const sp = planSpan(plan, today); if (sp.over || sp.week < 3) return null;
+  const last = weights[weights.length - 1], now = last.kg, toGo = plan.target - now, kind = plan.goal === 'muscle' ? 'gain' : 'loss';
+  if ((kind === 'loss' && toGo >= 0) || (kind === 'gain' && toGo <= 0)) return null; // 목표 달성
+  const from = new Date(today); from.setDate(from.getDate() - 13);
+  const cut = history.filter(h => !h.quick && h.cond && h.day >= dayKey(from)).length;
+  const stale = (today - parseDay(last.day)) / 864e5 > 10; // 10일 넘게 체중을 안 적음
+  const max = kind === 'loss' ? RATE.lossMax : RATE.gainMax, weeksLeft = Math.max(1, sp.left), abs = Math.abs(toGo);
+  const need = abs / weeksLeft, pct = need / now, behind = pct > max + 1e-9;
+  if (!behind) return cut >= 3 ? { behind: false, kind, cut, stale } : null;
+  const extendTo = WEEKS.find(w => w > (plan.weeks || 8) && abs / (w - sp.week + 1) / now <= max) ?? null;
+  const safeTarget = Math[kind === 'loss' ? 'ceil' : 'floor']((now + Math.sign(toGo) * now * max * weeksLeft) * 2) / 2;
+  return { behind, kind, need: Math.round(need * 100) / 100, pct: Math.round(pct * 1000) / 10, weeksLeft, extendTo, safeTarget, cut, stale };
+}
 // 체중 기록: [{day, kg}] → 처음·지금·목표까지 남은 양·최근 주당 변화
 export function weightTrend(log = [], target = null) {
   if (!log.length) return null;
@@ -235,15 +253,20 @@ function itemOf(plan, slot, recovery, entry) {
 // 돌려주는 값: {items, removed:[{slot,ex}], added:[{slot,ex,for}], swapped:[{slot,from,to}]}
 export function adjustToday(plan, tp, cond) {
   const parts = (cond && cond.parts) || [], level = (cond && cond.level) || 'good';
-  const removed = [], added = [], swapped = [], used = new Set(tp.items.map(x => x.slot));
+  const removed = [], added = [], swapped = [], rows = [], used = new Set(tp.items.map(x => x.slot));
   let items = [];
   for (const it of tp.items) {
-    if (!loads(it.ex, parts)) { items.push({ ...it }); continue; }
+    const n0 = items.length;
+    if (!loads(it.ex, parts)) items.push({ ...it });
+    else rowsFill(it);
+    rows.push({ from: it, i: items.length > n0 ? n0 : -1 });
+  }
+  function rowsFill(it) {
     if (it.slot === 'cardio') { // 유산소는 같은 칸에서 부담 없는 동작으로 바꿈(시간 종목만)
       const alt = SLOTS.cardio.ladder.find(e => EXDEF[exOf(e)].unit === 'sec' && !loads(exOf(e), parts));
       if (alt) { const n = itemOf(plan, 'cardio', tp.recovery, alt); n.reps = it.unit === 'sec' ? it.reps : n.reps; items.push(n); swapped.push({ slot: 'cardio', from: it.ex, to: n.ex }); }
       else removed.push({ slot: it.slot, ex: it.ex });
-      continue;
+      return;
     }
     removed.push({ slot: it.slot, ex: it.ex });
     const k = FILL.find(k => !used.has(k) && plan.slots[k] && !loads(exOf(SLOTS[k].ladder[plan.slots[k].tier]), parts));
@@ -254,7 +277,8 @@ export function adjustToday(plan, tp, cond) {
     if (level === 'tired') return { ...x, sets: Math.max(1, x.sets - 1) };
     return { ...x, sets: 1, reps: Math.max(min, Math.round(x.reps * 0.8 / step) * step) };
   });
-  return { items, removed, added, swapped };
+  // rows: 원래 종목마다 {from, to(바뀐 뒤 종목, 빠지면 null)} — 화면에서 바뀐 곳을 줄 그어 보여 줌
+  return { items, removed, added, swapped, rows: rows.map(r => ({ from: r.from, to: r.i >= 0 ? items[r.i] : null })) };
 }
 // 같은 관절 통증이 최근 기록(빠른 체험 제외)에서 이번까지 몇 번 연속인지 — 3번이면 진료 권유
 export function painStreak(history, parts) {
