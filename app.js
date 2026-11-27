@@ -1,10 +1,10 @@
-import * as SQ from './squat-logic.js?v=42';
-import * as PL from './plan.js?v=42';
-import * as PU from './pushup-logic.js?v=42';
-import * as GM from './goodmorning-logic.js?v=42';
-import { NUM, WARMUP, COOLDOWN, PLACE, GX, PLACE_G, STYLE_NAME_, STYLE_NAME, GOAL_NAME, RPE, PARQ, SIDE_KO, iyeyo, PHASE, WEEKS_NOTE } from './data-ko.js?v=42';
-import { makeExercises, JUDGED3 } from './exercises.js?v=42';
-import * as MV from './move-logic.js?v=42';
+import * as SQ from './squat-logic.js?v=43';
+import * as PL from './plan.js?v=43';
+import * as PU from './pushup-logic.js?v=43';
+import * as GM from './goodmorning-logic.js?v=43';
+import { NUM, WARMUP, COOLDOWN, PLACE, GX, PLACE_G, STYLE_NAME_, STYLE_NAME, GOAL_NAME, RPE, PARQ, SIDE_KO, iyeyo, PHASE, WEEKS_NOTE, PART_KO, COND_KO } from './data-ko.js?v=43';
+import { makeExercises, JUDGED3 } from './exercises.js?v=43';
+import * as MV from './move-logic.js?v=43';
 
 const EXERCISES = makeExercises({ pstyle: () => pstyle, counter: () => counter });
 let exercise = 'squat', pstyle = 'knees', flow = 'session', session = null;
@@ -102,7 +102,7 @@ async function start() {
       : '시작하지 못했어요: ' + (e && e.message ? e.message : e);
     $('err').style.display = 'block';
     $('startBtn').disabled = false; $('startBtn').textContent = '시작하기';
-    if (session) { session = null; show('intro'); applyFlow(); }
+    if (session) { session = null; cond = null; show('intro'); applyFlow(); }
     return;
   }
   counter = new (EX().Counter)(mode); CUE_TEXT = EX().lib.CUE_TEXT; NOREP_TEXT = EX().lib.NOREP_TEXT;
@@ -426,7 +426,34 @@ function acc() {
   $('accuracy').textContent = done.length ? `판정 정확도 ${Math.round(n('ok') / done.length * 100)}% (${done.length}회 응답 · 너그러움 ${n('lenient')} · 엄격함 ${n('harsh')})` : '';
 }
 
-$('startBtn').onclick = () => flow === 'session' ? startSession() : start();
+$('startBtn').onclick = () => flow === 'session' ? (slen === 'quick' ? startSession() : openCond()) : start();
+// ── v43: 오늘 컨디션 (운동 시작 전) ──
+let cond = null;
+function openCond() {
+  cond = { level: 'good', parts: [] }; pick('cLevel', 'good');
+  $('cParts').innerHTML = PL.PARTS.map(p => `<button data-v="${p}">${PART_KO[p]}</button>`).join('');
+  $('cParts').querySelectorAll('button').forEach(b => b.onclick = () => { b.classList.toggle('sel'); cond.parts = [...$('cParts').querySelectorAll('.sel')].map(x => x.dataset.v); renderCond(); });
+  renderCond(); show('cond'); $('cond').scrollTop = 0;
+}
+seg('cLevel', v => { if (cond) { cond.level = v; renderCond(); } });
+function renderCond() {
+  const plan = store.plan || defaultPlan(), tp = PL.todayPlan(plan, store.history), a = PL.adjustToday(plan, tp, cond), L = [];
+  for (const r of a.removed) { const ad = a.added.find(x => x.for === r.ex); L.push(`${exName(r.ex)} → <b>${ad ? exName(ad.ex) : '빼기'}</b>`); }
+  for (const s of a.swapped) L.push(`${exName(s.from)} → <b>${exName(s.to)}</b>`);
+  if (cond.level === 'tired') L.push('모든 종목 <b>세트를 하나씩 줄여요</b>');
+  if (cond.level === 'low') L.push('모든 종목 <b>1세트씩, 횟수는 80%로</b> 가볍게 해요');
+  const n = a.items.reduce((s, x) => s + x.sets, 0);
+  $('cPlan').innerHTML = L.length ? `<b>오늘은 이렇게 바꿔서 해요</b><br>${L.join('<br>')}<br><span class="note">본운동 ${a.items.length}종목 · ${n}세트. ${cond.level !== 'good' ? '세트를 줄인 날은 다음 운동 횟수를 올리지 않아요.' : '플랜은 그대로고, 오늘만 바꿔요.'}</span>`
+    : `<b>플랜대로 해요</b><br><span class="note">본운동 ${a.items.length}종목 · ${n}세트</span>`;
+  const pain = cond.parts.filter(p => PL.PAIN.includes(p)), st = PL.painStreak(store.history, pain), long = pain.filter(p => st[p] >= 3);
+  const w = [];
+  if (long.length) w.push(`<b>${long.map(p => PART_KO[p]).join('·')} 통증이 ${Math.max(...long.map(p => st[p]))}번 연속이에요.</b> 며칠 운동을 쉬고 병원이나 전문가에게 진료를 받아 보세요.`);
+  if (pain.length) w.push('날카로운 통증, 붓기, 저림, 관절이 빠질 것 같은 느낌이 있으면 오늘은 쉬세요. 운동 중에 아프면 바로 멈추세요.');
+  if (cond.level === 'low') w.push('잠을 못 잤거나 몸살 기운이 있으면 오늘은 쉬거나 가볍게 걷기만 해도 괜찮아요.');
+  $('cWarn').style.display = w.length ? 'block' : 'none'; $('cWarn').innerHTML = w.join('<br>');
+}
+$('cStart').onclick = () => startSession();
+$('cCancel').onclick = () => { cond = null; show('intro'); };
 // 시범·가이드: 시작 화면에서는 같은 창, 결과 화면에서는 결과가 사라지지 않게 새 창
 const guideUrl = (tab) => `guide.html?ex=${exercise}${exercise === 'pushup' ? '&style=' + (pstyle === 'full' ? 'full' : 'knees') : ''}${tab ? '&tab=' + tab : ''}`;
 $('guideBtn').onclick = () => { location.href = guideUrl(); };
@@ -437,7 +464,7 @@ $('muteBtn').onclick = () => { voice = !voice; if (!voice) speechSynthesis.cance
 $('dbgBtn').onclick = () => { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 $('copyBtn').onclick = async () => {
   const lines = counter.repLog.map((r, i) => `${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EX().line(r)} / 판정 ${({ ok: '맞음', lenient: '너그러움', harsh: '엄격함' })[results[i]] || '-'}`);
-  const text = `${EX().name} 데모 v42 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
+  const text = `${EX().name} 데모 v43 결과 [${mode}${exercise === 'pushup' ? '·' + ({ full: '기본', knees: '무릎', incline: '의자' })[pstyle] : ''}] (${new Date().toLocaleString('ko-KR')})\n카메라: ${camLabel}${camList ? ' (목록: ' + camList + ')' : ''}\n` + lines.join('\n') + '\n' + $('accuracy').textContent;
   try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = '복사했어요'; } catch { $('copyBtn').textContent = '복사하지 못했어요'; }
   setTimeout(() => $('copyBtn').textContent = '결과 복사하기', 2000);
 };
@@ -468,7 +495,9 @@ function buildPlan() {
   if (store.plan && PL.enterPhase(store.plan)) saveStore(); // v42: 새 단계에 들어서면 세트·휴식을 한 번 바꿈
   const tp = PL.todayPlan(store.plan || defaultPlan(), store.history, new Date(), quick ? qwk : null);
   todayWk = tp.wk;
-  for (const x of tp.items)
+  // v43: 오늘 컨디션에 맞춰 오늘 운동만 조절 (빠른 체험 제외)
+  const adj = !quick && cond ? PL.adjustToday(store.plan || defaultPlan(), tp, cond) : null;
+  for (const x of adj ? adj.items : tp.items)
     for (let n = 1, sets = quick ? 1 : x.sets; n <= sets; n++)
       items.push({ kind: 'set', slot: x.slot, ex: x.ex, style: x.style, set: n, of: sets, reps: quick ? (x.unit === 'sec' ? 15 : 5) : x.reps, rest: quick ? 20 : x.rest });
   items.push({ kind: 'timer', key: 'cooldown', title: '쿨다운', steps: scale(COOLDOWN) });
@@ -541,7 +570,7 @@ function renderHistory() {
     const sc = x.sets.filter(s => s.avg != null), avg = sc.length ? Math.round(sc.reduce((a, s) => a + s.avg, 0) / sc.length) : null;
     const rows = Object.values(byEx).map(ss => { const s0 = ss[0], tot = ss.reduce((a, s) => a + (s.counted || 0), 0), sa = ss.filter(s => s.avg != null), av = sa.length ? Math.round(sa.reduce((a, s) => a + s.avg, 0) / sa.length) : null;
       return `<li><b>${exName(s0.ex, s0.style)}</b><span>${ss.length}세트 · ${tot}${PL.EXDEF[s0.ex] && isSec(s0.ex) ? '초' : '회'}${av != null ? ' · ' + av + '점' : ''}</span></li>`; }).join('');
-    html += `<details class="hday"><summary><b>${d.getMonth() + 1}월 ${d.getDate()}일 (${WD[d.getDay()]})</b><span>${x.quick ? '빠른 체험' : '구성 ' + (x.wk || '-')}${x.mins ? ' · ' + x.mins + '분' : ''} · ${x.sets.length}세트${avg != null ? ' · 자세 ' + avg + '점' : ''}</span></summary><ul>${rows || '<li><span>완료한 세트가 없어요</span></li>'}</ul></details>`;
+    html += `<details class="hday"><summary><b>${d.getMonth() + 1}월 ${d.getDate()}일 (${WD[d.getDay()]})</b><span>${x.quick ? '빠른 체험' : '구성 ' + (x.wk || '-')}${x.cond ? ' · 컨디션 조절' : ''}${x.mins ? ' · ' + x.mins + '분' : ''} · ${x.sets.length}세트${avg != null ? ' · 자세 ' + avg + '점' : ''}</span></summary><ul>${rows || '<li><span>완료한 세트가 없어요</span></li>'}</ul></details>`;
   }
   $('hList').innerHTML = html || '<p class="note">아직 기록이 없어요.</p>';
 }
@@ -657,7 +686,7 @@ $('pstyle').addEventListener('click', () => setTimeout(renderPlan));
 
 function startSession() {
   say('', true); // iOS 음성 잠금 해제 (사용자 터치 안에서)
-  session = { items: buildPlan(), i: 0, startAt: Date.now(), sets: [], adj: {}, wk: todayWk, recovery: !!(store.plan && PL.weekInfo(store.plan).recovery) };
+  session = { items: buildPlan(), i: 0, startAt: Date.now(), sets: [], adj: {}, wk: todayWk, recovery: !!(store.plan && PL.weekInfo(store.plan).recovery), cond: slen === 'quick' ? null : cond };
   loadModel().catch(() => {}); // 워밍업 동안 자세 인식 모델을 미리 받아 둠
   runItem();
 }
@@ -680,7 +709,7 @@ function showMove([, , , key, side, dir]) {
   const f = $('tPrev'); if (!key) { f.style.display = 'none'; return; }
   f.style.display = 'block';
   if (movesReady && f.contentWindow) f.contentWindow.postMessage({ type: 'move', ex: key, side, dir }, location.origin);
-  else f.src = `guide.html?v=42&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
+  else f.src = `guide.html?v=43&ex=${key}&embed=1&nocap=1${side ? '&side=' + side : ''}${dir ? '&dir=' + dir : ''}`;
 }
 function runTimer(it) {
   show('timer');
@@ -719,7 +748,7 @@ $('gPrev').addEventListener('load', () => { gReady = true; });
 function gMove(ex, side) {
   const f = $('gPrev');
   if (gReady && f.contentWindow) f.contentWindow.postMessage({ type: 'move', ex, side }, location.origin);
-  else f.src = `guide.html?v=42&ex=${ex}&embed=1&nocap=1&side=${side}`;
+  else f.src = `guide.html?v=43&ex=${ex}&embed=1&nocap=1&side=${side}`;
 }
 function runGuided(it) {
   show('gset');
@@ -826,7 +855,7 @@ function showRest() {
   if (nx && nx.kind === 'set') {
     $('rNextT').textContent = `다음: ${exName(nx.ex, nx.style)} ${nx.set} / ${nx.of}세트 · ${fmtN(nx.ex, tgt(nx))}`;
     $('rPlace').textContent = changing ? placeOf(nx.ex) : '같은 자리에서 이어서 해요.';
-    const src = JUDGED3.includes(nx.ex) ? `guide.html?ex=${nx.ex}&embed=1${nx.ex === 'pushup' ? '&style=' + ((nx.style || pstyle) === 'full' ? 'full' : 'knees') : ''}` : `guide.html?v=42&ex=${nx.ex}&embed=1&nocap=1`;
+    const src = JUDGED3.includes(nx.ex) ? `guide.html?ex=${nx.ex}&embed=1${nx.ex === 'pushup' ? '&style=' + ((nx.style || pstyle) === 'full' ? 'full' : 'knees') : ''}` : `guide.html?v=43&ex=${nx.ex}&embed=1&nocap=1`;
     if ($('rPrev').getAttribute('src') !== src) $('rPrev').setAttribute('src', src);
     $('rPrev').style.display = 'block';
   } else { $('rNextT').textContent = '다음: 쿨다운 5분'; $('rPlace').textContent = '마지막 세트까지 끝났어요. 체감 강도를 누르고 쿨다운을 시작하세요.'; $('rPrev').style.display = 'none'; $('rPrev').removeAttribute('src'); }
@@ -893,11 +922,11 @@ function finishSession() {
     S.saved = true;
     const sets = S.sets.map(x => ({ slot: x.slot, ex: x.ex, style: x.style, set: x.set, target: x.target, counted: doneOf(x), attempts: x.guided ? null : x.log.length, avg: x.log.length ? Math.round(x.log.reduce((a, r) => a + r.score, 0) / x.log.length) : null, rpe: x.rpe }));
     const quick = slen === 'quick';
-    store.history.push({ day: PL.dayKey(new Date()), at: Date.now(), quick, wk: S.wk, mins, mode, sets });
+    store.history.push({ day: PL.dayKey(new Date()), at: Date.now(), quick, wk: S.wk, mins, mode, sets, ...(S.cond && (S.cond.level !== 'good' || S.cond.parts.length) ? { cond: S.cond } : {}) });
     if (store.history.length > 300) store.history.splice(0, store.history.length - 300);
     if (!quick && store.plan) {
       const ch = PL.progress(store.plan, sets, S.recovery);
-      const WHY = { easy: '쉬웠다고 해서', hit: '목표를 다 채워서', same: '그대로 한 번 더', max: '한계였던 세트가 있어서', missed: '목표의 70%를 못 채워서', addSet: '충분해서 세트를 하나 늘려요', nextStep: '더 어려운 동작으로 올라가요!', phaseHold: '어려운 동작은 발전 단계(5주차)부터 해요', top: '최고 단계예요. 지금을 유지해요', recovery: '회복 주라 그대로', partial: '세트를 다 못 해서 그대로' };
+      const WHY = { easy: '쉬웠다고 해서', hit: '목표를 다 채워서', same: '그대로 한 번 더', max: '한계였던 세트가 있어서', missed: '목표의 70%를 못 채워서', addSet: '충분해서 세트를 하나 늘려요', nextStep: '더 어려운 동작으로 올라가요!', phaseHold: '어려운 동작은 발전 단계(5주차)부터 해요', top: '최고 단계예요. 지금을 유지해요', recovery: '회복 주라 그대로', partial: S.cond && S.cond.level !== 'good' ? '컨디션에 맞춰 줄인 날이라 그대로' : '세트를 다 못 해서 그대로' };
       const nm = (e) => exName(PL.exOf(e), PL.styleOf(e)), u = (e, n) => `${n}${isSec(PL.exOf(e)) ? '초' : '회'}`;
       const lines = Object.values(ch).map((c) => {
         const f = c.from, t = c.to;
@@ -907,14 +936,18 @@ function finishSession() {
       });
       if (lines.length) $('dNext').innerHTML = '<b>다음 운동</b><br>' + lines.join('<br>');
     }
+    if (S.cond && (S.cond.level !== 'good' || S.cond.parts.length)) {
+      const why = [S.cond.level !== 'good' ? COND_KO[S.cond.level] : '', ...S.cond.parts.map(p => PART_KO[p])].filter(Boolean).join(', ');
+      $('dNext').innerHTML = `<span class="note">오늘은 컨디션(${why})에 맞춰 바꿔서 했어요. 뺀 종목은 다음에 그대로 이어서 해요.</span><br>` + $('dNext').innerHTML;
+    }
     saveStore();
   }
   show('done'); say('오늘 운동 끝! 수고했어요.', true);
 }
-$('dHome').onclick = () => { session = null; show('intro'); $('startBtn').disabled = false; applyFlow(); };
+$('dHome').onclick = () => { session = null; cond = null; show('intro'); $('startBtn').disabled = false; applyFlow(); };
 $('dCopy').onclick = async () => {
   const S = session; if (!S) return;
-  const lines = [`오늘의 운동 데모 v42 결과 [${mode}·구성 ${S.wk}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
+  const lines = [`오늘의 운동 데모 v43 결과 [${mode}·구성 ${S.wk}·${slen === 'quick' ? '빠른 체험' : '전체'}] (${new Date().toLocaleString('ko-KR')})`, `카메라: ${camLabel}`];
   for (const x of S.sets) {
     lines.push(`■ ${exName(x.ex, x.style)} ${x.set}/${x.of}세트 (목표 ${fmtN(x.ex, x.target)}, 체감 ${x.rpe ? RPE[x.rpe][0] : '-'})${x.guided ? ` · 음성 안내 · ${fmtN(x.ex, x.done)} 함` : ''}`);
     if (!x.guided) x.log.forEach(r => lines.push(`${r.n}회: ${r.counted ? '카운트 ' + r.count : '안 셈(' + r.noRep + ')'} · ${r.score}점 ${r.faults.join('+') || 'ok'} / ${EXERCISES[x.ex].line(r)}`));

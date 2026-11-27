@@ -94,3 +94,7 @@ export const WEEKS_NOTE = {
   8: '1~4주 기초(자세 익히기) → 5~8주 발전(운동량 늘리기). 단계마다 마지막 주는 회복 주예요.',
   12: '1~4주 기초(자세) → 5~8주 발전(운동량) → 9~12주 강화(더 어려운 동작). 단계마다 마지막 주는 회복 주예요.',
 };
+
+// v43: 오늘 컨디션 — 부위 (plan.js PARTS의 키)
+export const PART_KO = { knee: '무릎', back: '허리', shoulder: '어깨', wrist: '손목', ankle: '발목', legs: '하체 근육통', arms: '상체 근육통' };
+export const COND_KO = { good: '좋아요', tired: '조금 피곤해요', low: '많이 피곤해요' };

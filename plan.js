@@ -208,6 +208,64 @@ export function todayPlan(plan, history = [], today = new Date(), pick = null) {
   return { week, recovery, wk, items };
 }
 
+// ── v43: 오늘 컨디션으로 오늘 운동만 조절 (플랜 자체는 그대로) ──
+// 부위별 부담: 그 부위가 아프거나(knee·back·shoulder·wrist·ankle) 근육통(legs·arms)이면 그 종목을 빼고 다른 부위 종목으로 채움
+// 허리: 굽히고 펴며 버티는 동작(굿모닝·한 다리 RDL·슈퍼맨·Y·W)만 뺌. 버드독·데드버그·컬업·플랭크·엉덩이 들기는 허리 통증에도 흔히 쓰는 안정화 운동이라 남김(McGill)
+export const LOAD = {
+  chairsquat: ['knee', 'legs'], squat: ['knee', 'legs'], jumpsquat: ['knee', 'ankle', 'legs'], splitsquat: ['knee', 'legs'], lunge: ['knee', 'legs'],
+  bulgarian: ['knee', 'legs'], wallsit: ['knee', 'legs'], sidelunge: ['knee', 'legs'], calfraise: ['ankle', 'legs'], bridge: ['legs'], slbridge: ['legs'],
+  goodmorning: ['back', 'legs'], slrdl: ['back', 'legs', 'ankle'], pushup: ['shoulder', 'wrist', 'arms'], chairdip: ['shoulder', 'wrist', 'arms'],
+  pikepush: ['shoulder', 'wrist', 'arms'], yraise: ['shoulder', 'back', 'arms'], wraise: ['shoulder', 'back', 'arms'], superman: ['back'],
+  kneeplank: ['shoulder'], plank: ['shoulder'], mountain: ['shoulder', 'wrist'], sideplankknee: ['shoulder'], sideplank: ['shoulder'],
+  birddog: ['wrist', 'knee', 'shoulder'], deadbug: [], curlup: [], stepjack: ['knee', 'ankle', 'legs'], jumpingjack: ['knee', 'ankle', 'legs'],
+  highknees: ['knee', 'ankle', 'legs'], burpee: ['knee', 'ankle', 'wrist', 'shoulder', 'back', 'legs', 'arms'],
+};
+export const PARTS = ['knee', 'back', 'shoulder', 'wrist', 'ankle', 'legs', 'arms'];
+export const PAIN = ['knee', 'back', 'shoulder', 'wrist', 'ankle']; // 관절 통증(근육통이 아닌 것)
+// 대신 넣을 칸 순서: 오늘 구성에 없는 칸 중에서, 고른 부위에 부담이 없는 것
+const FILL = ['hingeA', 'upper', 'coreC', 'abs', 'backB', 'calf', 'coreB', 'backA', 'push', 'coreA', 'knee', 'lunge', 'legc', 'hingeB'];
+const loads = (ex, parts) => (LOAD[ex] || []).some(p => parts.includes(p));
+function itemOf(plan, slot, recovery, entry) {
+  const s = plan.slots[slot], e = entry || SLOTS[slot].ladder[s.tier], ex = exOf(e), d = EXDEF[ex];
+  return { slot, ex, style: styleOf(e), unit: d.unit, side: !!d.side, judged: !!d.judged, sets: recovery ? Math.max(1, s.sets - 1) : s.sets, reps: entry ? d.start[1] : s.reps, rest: s.rest };
+}
+// cond: {level: 'good'|'tired'|'low', parts: [...]}
+//  tired(조금 피곤): 세트 -1(최소 1) / low(많이 피곤): 1세트씩, 횟수 80%
+//  → 세트를 다 안 하므로 progress()는 'partial'로 보고 다음 운동을 올리지 않음
+// 돌려주는 값: {items, removed:[{slot,ex}], added:[{slot,ex,for}], swapped:[{slot,from,to}]}
+export function adjustToday(plan, tp, cond) {
+  const parts = (cond && cond.parts) || [], level = (cond && cond.level) || 'good';
+  const removed = [], added = [], swapped = [], used = new Set(tp.items.map(x => x.slot));
+  let items = [];
+  for (const it of tp.items) {
+    if (!loads(it.ex, parts)) { items.push({ ...it }); continue; }
+    if (it.slot === 'cardio') { // 유산소는 같은 칸에서 부담 없는 동작으로 바꿈(시간 종목만)
+      const alt = SLOTS.cardio.ladder.find(e => EXDEF[exOf(e)].unit === 'sec' && !loads(exOf(e), parts));
+      if (alt) { const n = itemOf(plan, 'cardio', tp.recovery, alt); n.reps = it.unit === 'sec' ? it.reps : n.reps; items.push(n); swapped.push({ slot: 'cardio', from: it.ex, to: n.ex }); }
+      else removed.push({ slot: it.slot, ex: it.ex });
+      continue;
+    }
+    removed.push({ slot: it.slot, ex: it.ex });
+    const k = FILL.find(k => !used.has(k) && plan.slots[k] && !loads(exOf(SLOTS[k].ladder[plan.slots[k].tier]), parts));
+    if (k) { used.add(k); const n = itemOf(plan, k, tp.recovery); n.fill = it.slot; items.push(n); added.push({ slot: k, ex: n.ex, for: it.ex }); }
+  }
+  if (level !== 'good') items = items.map(x => {
+    const min = x.unit === 'sec' ? LIMITS.minSec : LIMITS.minReps, step = stepOf(x.ex);
+    if (level === 'tired') return { ...x, sets: Math.max(1, x.sets - 1) };
+    return { ...x, sets: 1, reps: Math.max(min, Math.round(x.reps * 0.8 / step) * step) };
+  });
+  return { items, removed, added, swapped };
+}
+// 같은 관절 통증이 최근 기록(빠른 체험 제외)에서 이번까지 몇 번 연속인지 — 3번이면 진료 권유
+export function painStreak(history, parts) {
+  const real = history.filter(h => !h.quick), out = {};
+  for (const p of parts.filter(p => PAIN.includes(p))) {
+    let n = 1; for (let i = real.length - 1; i >= 0 && ((real[i].cond && real[i].cond.parts) || []).includes(p); i--) n++;
+    out[p] = n;
+  }
+  return out;
+}
+
 // 이번 주(월요일부터) 플랜대로 한 횟수, 최근 14일 운동 횟수
 export function counts(history, today = new Date()) {
   const mon = dayKey(monday(today)), from = new Date(today); from.setDate(from.getDate() - 13);

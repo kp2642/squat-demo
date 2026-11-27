@@ -108,3 +108,5 @@ details.opts>div{margin-top:12px}
 .hday li{display:flex;justify-content:space-between;gap:8px}.hday li span{color:var(--muted)}
 .hmon{font-size:13px;font-weight:700;color:var(--muted);margin:8px 0 0}
 .phase{margin-top:10px;padding-top:10px;border-top:1px solid #E4E4E4}.phase small{color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}.chips button{height:40px;padding:0 14px;border:1px solid #D6D6D6;border-radius:20px;background:#fff;color:var(--ink);font-size:15px}.chips button.sel{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}
+#cPlan{font-size:14px;line-height:1.6}

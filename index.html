@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="theme-color" content="#1E1E1E">
 <title>AI 자세 코치</title>
-<link rel="stylesheet" href="app.css?v=42">
+<link rel="stylesheet" href="app.css?v=43">
 </head>
 <body>
 
@@ -89,7 +89,7 @@
   <div id="err"></div>
   <div style="flex:1"></div>
   <button class="primary" id="startBtn">시작하기</button>
-  <p class="foot">v42 · <button class="link" id="devBtn">테스트 도구 켜기</button></p>
+  <p class="foot">v43 · <button class="link" id="devBtn">테스트 도구 켜기</button></p>
 </section>
 
 <section id="welcome" class="screen light">
@@ -105,6 +105,21 @@
   <div style="flex:1"></div>
   <button class="primary" id="wMake">내 플랜 만들기 (약 1분)</button>
   <button class="ghost" id="wLater">먼저 둘러볼게요</button>
+</section>
+
+<section id="cond" class="screen light">
+  <div class="kicker">운동 전 확인</div>
+  <h2>오늘 컨디션은 어때요?</h2>
+  <div class="seg" id="cLevel" style="grid-template-columns:repeat(3,1fr)"><button data-v="good" class="sel">좋아요</button><button data-v="tired">조금 피곤해요</button><button data-v="low">많이 피곤해요</button></div>
+  <div>
+    <label class="lbl">아프거나 뻐근한 곳 (있으면 모두 골라요)</label>
+    <div class="chips" id="cParts" style="margin-top:6px"></div>
+  </div>
+  <div class="card" id="cPlan"></div>
+  <div class="card warn" id="cWarn" style="display:none"></div>
+  <div style="flex:1"></div>
+  <button class="primary" id="cStart">이대로 시작</button>
+  <button class="ghost" id="cCancel">취소</button>
 </section>
 
 <section id="history" class="screen light">
@@ -258,6 +273,6 @@
   <button class="primary" id="dHome">처음으로</button>
 </section>
 
-<script type="module" src="app.js?v=42"></script>
+<script type="module" src="app.js?v=43"></script>
 </body>
 </html>
